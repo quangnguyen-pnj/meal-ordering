@@ -1,0 +1,267 @@
+// Core schema for Phase 0 (plan 6.3). Later phases add menu, registration, attendance, etc.
+// Never delete business data: use status / active / archivedAt (plan 7.1 rule 7).
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  LEFT
+}
+
+enum CostCenterSource {
+  DMP
+  MANUAL
+}
+
+/// EMPLOYEE is implicit for every active employee and is not stored.
+enum AssignableRole {
+  DEPT_ADMIN
+  HC_ADMIN
+  SYS_ADMIN
+}
+
+enum AuthMethod {
+  PIN
+  ENTRA
+}
+
+enum SyncType {
+  ORG_EMPLOYEES
+  ATTENDANCE
+  LEAVE
+}
+
+enum SyncStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+model Factory {
+  id             String   @id @default(cuid())
+  code           String   @unique
+  name           String
+  dmpCompanyCode String?
+  timezone       String   @default("Asia/Ho_Chi_Minh")
+  createdAt      DateTime @default(now())
+
+  settings        Setting[]
+  suppliers       Supplier[]
+  canteens        Canteen[]
+  floors          Floor[]
+  costCenters     CostCenter[]
+  orgUnits        OrgUnit[]
+  roleAssignments RoleAssignment[]
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  factoryId String
+  key       String
+  /// JSON value; shape is validated per key by packages/shared SETTING_DEFINITIONS.
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  factory Factory @relation(fields: [factoryId], references: [id])
+
+  @@unique([factoryId, key])
+}
+
+model Supplier {
+  id        String  @id @default(cuid())
+  factoryId String
+  name      String
+  unitPrice Decimal @db.Decimal(12, 2)
+  active    Boolean @default(true)
+
+  factory  Factory   @relation(fields: [factoryId], references: [id])
+  canteens Canteen[]
+}
+
+/// Where meals are served; menus are built per canteen (BR-15). BR-62: never deleted.
+model Canteen {
+  id         String  @id @default(cuid())
+  factoryId  String
+  code       String
+  name       String
+  supplierId String
+  active     Boolean @default(true)
+
+  factory  Factory   @relation(fields: [factoryId], references: [id])
+  supplier Supplier  @relation(fields: [supplierId], references: [id])
+  orgUnits OrgUnit[]
+
+  @@unique([factoryId, code])
+}
+
+/// Delivery location of a meal unit's box. BR-62: never deleted.
+model Floor {
+  id        String  @id @default(cuid())
+  factoryId String
+  code      String
+  name      String
+  sortOrder Int     @default(0)
+  active    Boolean @default(true)
+
+  factory  Factory   @relation(fields: [factoryId], references: [id])
+  orgUnits OrgUnit[]
+
+  @@unique([factoryId, code])
+}
+
+/// Accounting unit that bears an employee's meal cost. BR-62: never deleted.
+model CostCenter {
+  id        String           @id @default(cuid())
+  factoryId String
+  code      String
+  name      String
+  source    CostCenterSource @default(MANUAL)
+  active    Boolean          @default(true)
+
+  factory   Factory    @relation(fields: [factoryId], references: [id])
+  orgUnits  OrgUnit[]
+  employees Employee[] @relation("CostCenterOverride")
+
+  @@unique([factoryId, code])
+}
+
+/// Node of the up-to-6-level org tree (BR-61). floorId / canteenId / costCenterId are nullable and
+/// inherited from the nearest ancestor that has one (BR-62).
+model OrgUnit {
+  id           String   @id @default(cuid())
+  factoryId    String
+  dmpCode      String
+  name         String
+  /// 1..6 (BR-61)
+  level        Int
+  dmpLevelName String
+  parentId     String?
+  /// Materialized path of ids: "/<rootId>/<id>/.../<thisId>/" (trailing slash), see rules/permissions.
+  path         String
+  isMealUnit   Boolean  @default(false)
+  floorId      String?
+  canteenId    String?
+  costCenterId String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  factory    Factory     @relation(fields: [factoryId], references: [id])
+  parent     OrgUnit?    @relation("OrgTree", fields: [parentId], references: [id])
+  children   OrgUnit[]   @relation("OrgTree")
+  floor      Floor?      @relation(fields: [floorId], references: [id])
+  canteen    Canteen?    @relation(fields: [canteenId], references: [id])
+  costCenter CostCenter? @relation(fields: [costCenterId], references: [id])
+
+  employees       Employee[]       @relation("EmployeeOrgUnit")
+  mealUnitMembers Employee[]       @relation("EmployeeMealUnit")
+  roleAssignments RoleAssignment[]
+
+  @@unique([factoryId, dmpCode])
+  @@index([parentId])
+  @@index([path])
+}
+
+model Employee {
+  id                   String         @id @default(cuid())
+  /// DMP employeeId, normalized to employeeCode (plan section 5).
+  employeeCode         String         @unique
+  name                 String
+  email                String?
+  orgUnitId            String
+  /// Nearest flagged ancestor-or-self (BR-60); recomputed on sync or flag change.
+  mealUnitId           String?
+  costCenterOverrideId String?
+  dmpCostCenterCode    String?
+  status               EmployeeStatus @default(ACTIVE)
+  startDate            DateTime?      @db.Date
+  endDate              DateTime?      @db.Date
+  pinHash              String?
+  pinMustChange        Boolean        @default(true)
+  pinFailedCount       Int            @default(0)
+  lockedUntil          DateTime?
+  createdAt            DateTime       @default(now())
+
+  orgUnit            OrgUnit          @relation("EmployeeOrgUnit", fields: [orgUnitId], references: [id])
+  mealUnit           OrgUnit?         @relation("EmployeeMealUnit", fields: [mealUnitId], references: [id])
+  costCenterOverride CostCenter?      @relation("CostCenterOverride", fields: [costCenterOverrideId], references: [id])
+  roleAssignments    RoleAssignment[]
+  sessions           AuthSession[]
+  auditLogs          AuditLog[]
+
+  @@index([orgUnitId])
+  @@index([mealUnitId])
+  @@index([email])
+}
+
+model RoleAssignment {
+  id         String         @id @default(cuid())
+  employeeId String
+  role       AssignableRole
+  factoryId  String
+  /// Only for DEPT_ADMIN: the org node (and its children) they manage.
+  orgUnitId  String?
+  createdAt  DateTime       @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+  factory  Factory  @relation(fields: [factoryId], references: [id])
+  orgUnit  OrgUnit? @relation(fields: [orgUnitId], references: [id])
+
+  @@index([employeeId])
+}
+
+model AuthSession {
+  id         String     @id @default(cuid())
+  employeeId String
+  /// SHA-256 of the opaque cookie token; the token itself is never stored.
+  tokenHash  String     @unique
+  /// How the user signed in; the forced PIN change only applies to PIN sessions.
+  method     AuthMethod
+  expiresAt  DateTime
+  userAgent  String?
+  createdAt  DateTime   @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId])
+  @@index([expiresAt])
+}
+
+/// BR-70: who, when, before, after, reason. Append-only.
+model AuditLog {
+  id         String   @id @default(cuid())
+  /// Null for automatic system actions.
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String
+  before     Json?
+  after      Json?
+  reason     String?
+  at         DateTime
+
+  actor Employee? @relation(fields: [actorId], references: [id])
+
+  @@index([at])
+  @@index([actorId])
+  @@index([entityType, entityId])
+}
+
+model SyncRun {
+  id          String     @id @default(cuid())
+  type        SyncType
+  startedAt   DateTime
+  finishedAt  DateTime?
+  status      SyncStatus
+  recordCount Int?
+  error       String?
+
+  @@index([type, startedAt])
+}

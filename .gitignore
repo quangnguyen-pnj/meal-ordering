@@ -1,0 +1,14 @@
+node_modules
+dist
+.next
+coverage
+.turbo
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+.pg-data
+apps/api/src/generated
+
+# Internal planning doc (contains unpatched DMP security findings); keep out of the public repo
+docs/plan.md
