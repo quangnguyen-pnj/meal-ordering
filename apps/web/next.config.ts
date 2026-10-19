@@ -5,8 +5,9 @@ const apiInternalUrl = process.env.API_INTERNAL_URL ?? 'http://localhost:3001';
 
 const config: NextConfig = {
   reactStrictMode: true,
-  // Docker image: a self-contained server traced from the monorepo root.
-  output: 'standalone',
+  // Docker image only (NEXT_OUTPUT=standalone): a self-contained server traced from the monorepo
+  // root. Off by default because tracing creates symlinks, which plain Windows accounts cannot.
+  output: process.env.NEXT_OUTPUT === 'standalone' ? 'standalone' : undefined,
   outputFileTracingRoot: path.join(__dirname, '../../'),
   // Linting runs through `pnpm lint` (root flat config), not during the Next build.
   eslint: { ignoreDuringBuilds: true },

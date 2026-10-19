@@ -21,7 +21,7 @@ function arg(name: string, fallback: string): string {
 
 async function main(): Promise<void> {
   const temp = process.argv.includes('--temp');
-  const port = Number(arg('port', '5432'));
+  const port = Number(arg('port', '5433'));
   const database = arg('db', 'meal');
   const user = 'meal';
   const password = 'meal_dev_password';

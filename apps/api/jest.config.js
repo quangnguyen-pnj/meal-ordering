@@ -1,7 +1,9 @@
 const base = {
   rootDir: '.',
   testEnvironment: 'node',
-  transform: { '^.+\.ts$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.json', diagnostics: true }] },
+  transform: {
+    '^.+\.ts$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.json', diagnostics: true }],
+  },
 };
 
 /** @type {import('jest').Config} */
