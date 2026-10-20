@@ -61,6 +61,7 @@ Choices made while building, where the plan (`docs/plan.md`, MVP Plan v1.1) was 
 - **Tests use a real PostgreSQL without Docker** (`embedded-postgres`, started by `apps/api/test/global-setup.ts`, initialised as UTF8 because the Windows default code page cannot store Vietnamese). `pnpm --filter @meal/api db:local` runs the same thing as a persistent dev database. Set `TEST_DATABASE_URL` to use an existing empty database instead.
 - The compose stack runs with `NODE_ENV=development` and seeds on start so there is something to sign in with; production needs `ENTRA_MODE=oidc`, a real `SESSION_SECRET` and no seed.
 - The API image keeps dev dependencies because the entrypoint needs the Prisma CLI (`migrate deploy`) and `tsx` (seed). Slimming it is a P7 job.
+- **`pnpm dev` runs the API through `tsc-watch`, not `tsx`.** Nest resolves constructor dependencies from `emitDecoratorMetadata`, which esbuild (inside `tsx`) does not emit, so `tsx watch` crashed at boot and the web proxy answered every `/api` call with 500. `tsx` is still fine for the seed and scripts, which use no Nest DI.
 
 ## Phase 1 – Org structure and menu
 
@@ -106,5 +107,4 @@ Choices made while building, where the plan (`docs/plan.md`, MVP Plan v1.1) was 
 
 ### Tooling
 
-- **`pnpm dev` for the API was broken in P0**: `tsx` (esbuild) emits no decorator metadata, so Nest cannot inject anything. It now uses `tsc-watch` and runs the compiled output.
 - **Tests on Linux without the embedded PostgreSQL's ICU 60:** set `TEST_DATABASE_URL` to an empty disposable database (the existing escape hatch). Test files clean up what they create, except `ForecastLine` rows, which are write-once by design.

@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build": "prisma generate && tsc -p tsconfig.build.json",
-    "dev": "prisma generate && dotenv -e ../../.env -- tsc-watch -p tsconfig.build.json --onSuccess \"node dist/main.js\"",
+    "dev": "prisma generate && dotenv -e ../../.env -- tsc-watch -p tsconfig.build.json --noClear --onSuccess \"node dist/main.js\"",
     "start": "node dist/main.js",
     "typecheck": "prisma generate && tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
@@ -43,7 +43,7 @@
     "prisma": "^6.19.0",
     "supertest": "^7.1.0",
     "ts-jest": "^29.4.0",
-    "tsc-watch": "^7.2.1",
+    "tsc-watch": "7.2.1",
     "tsx": "^4.20.0"
   }
 }
