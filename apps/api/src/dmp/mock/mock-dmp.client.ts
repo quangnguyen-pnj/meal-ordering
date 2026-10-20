@@ -60,7 +60,6 @@ export class MockDmpClient implements DmpClient {
       name: n.name,
       parentCode: n.parentId ? (codeById.get(n.parentId) ?? null) : null,
       levelName: n.dmpLevelName,
-      depth: n.level,
       costCenterCode: null,
     }));
   }
@@ -75,6 +74,7 @@ export class MockDmpClient implements DmpClient {
       orgUnitCode: codeById.get(e.orgUnitId) ?? '',
       costCenterCode: e.dmpCostCenterCode,
       startDate: e.startDate,
+      endDate: null,
     }));
   }
 

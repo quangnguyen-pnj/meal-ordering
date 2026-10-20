@@ -1,4 +1,5 @@
 import type { AppEnv } from '../config/env';
+import { parseEmployeePage, parseHierarchy } from './dmp-parsers';
 import {
   DmpError,
   type DmpAttendanceRecord,
@@ -10,12 +11,15 @@ import {
 
 const TIMEOUT_MS = 10_000;
 const MAX_ATTEMPTS = 3;
+const PAGE_SIZE = 500;
+/** Safety stop: 1,700 employees fit in 4 pages; 200 pages means the paging is broken. */
+const MAX_PAGES = 200;
 
 /**
- * Skeleton of the real DMP client (plan section 5). It already holds the service-token login and
- * a request helper with the 10 s timeout and 3 retries with backoff; the endpoint methods are
- * filled in by the phase that first needs them (org + employees in P1, attendance + leave in P3).
- * Never used in tests: they run with DMP_MODE=mock.
+ * The real DMP client (plan section 5): service-token login and a request helper with the 10 s
+ * timeout and 3 retries with backoff. Org tree and employees are implemented (P1); attendance and
+ * leave follow in P3. Never used against a real DMP in tests: they run with DMP_MODE=mock or a
+ * stubbed fetch.
  *
  * Endpoint notes for those phases:
  *   - GET /api/hr-employees  (page, size <= 500, sort=employeeId,asc), Spring Page, sequential pages.
@@ -29,12 +33,27 @@ export class HttpDmpClient implements DmpClient {
 
   constructor(private readonly env: AppEnv) {}
 
+  /** GET /api/hierarchy: the full tree, unpaged. */
   async getOrgTree(): Promise<DmpOrgNode[]> {
-    return this.notImplemented('getOrgTree', 'P1');
+    return parseHierarchy(await this.get<unknown>('/api/hierarchy'));
   }
 
+  /** GET /api/hr-employees: pages fetched one after another, size 500, sorted by employeeId. */
   async getEmployees(): Promise<DmpEmployee[]> {
-    return this.notImplemented('getEmployees', 'P1');
+    const all: DmpEmployee[] = [];
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const query = new URLSearchParams({
+        page: String(page),
+        size: String(PAGE_SIZE),
+        sort: 'employeeId,asc',
+      });
+      const { items, last } = parseEmployeePage(
+        await this.get<unknown>(`/api/hr-employees?${query.toString()}`),
+      );
+      all.push(...items);
+      if (last) return all;
+    }
+    throw new DmpError('API_ERROR', `DMP /api/hr-employees returned more than ${MAX_PAGES} pages`);
   }
 
   async getAttendance(_date: string): Promise<DmpAttendanceRecord[]> {

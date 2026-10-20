@@ -21,6 +21,8 @@ const EnvSchema = z
     SESSION_TTL_HOURS: z.coerce.number().positive().default(12),
     COOKIE_SECURE: bool(false),
     CLOCK_FAKE_ENABLED: bool(false),
+    /** pg-boss background jobs (plan 6.5). Tests turn them off and call the handlers directly. */
+    JOBS_ENABLED: bool(true),
     /** Employee code that is made SYS_ADMIN on startup (plan section 3: the first system admin). */
     FIRST_SYSTEM_ADMIN_CODE: optionalString,
     ENTRA_MODE: z.enum(['mock', 'oidc']).default('mock'),

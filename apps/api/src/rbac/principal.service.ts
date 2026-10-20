@@ -18,7 +18,10 @@ export class PrincipalService {
       include: {
         orgUnit: { select: { factoryId: true } },
         mealUnit: { select: { path: true } },
-        roleAssignments: { include: { orgUnit: { select: { path: true, active: true } } } },
+        roleAssignments: {
+          where: { revokedAt: null },
+          include: { orgUnit: { select: { path: true, active: true } } },
+        },
       },
     });
     if (!e || e.status !== 'ACTIVE') return null;

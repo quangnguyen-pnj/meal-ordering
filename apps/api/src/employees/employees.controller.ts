@@ -6,9 +6,11 @@ import {
   HttpStatus,
   Param,
   Post,
+  Put,
   Query,
   Req,
 } from '@nestjs/common';
+import { CostCenterOverrideSchema } from '@meal/shared';
 import { z } from 'zod';
 import { PinAuthService } from '../auth/pin-auth.service';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
@@ -18,6 +20,13 @@ import { EmployeesService } from './employees.service';
 
 const ListQuerySchema = z.object({
   q: z.string().trim().max(64).optional(),
+  orgUnitId: z.string().min(1).optional(),
+  floorId: z.string().min(1).optional(),
+  canteenId: z.string().min(1).optional(),
+  costCenterId: z.string().min(1).optional(),
+  mealStatus: z.enum(['OK', 'NO_MEAL_UNIT', 'INVALID_MEAL_UNIT']).optional(),
+  status: z.enum(['ACTIVE', 'LEFT']).optional(),
+  offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 
@@ -30,15 +39,16 @@ export class EmployeesController {
     private readonly pinAuth: PinAuthService,
   ) {}
 
-  /** Employee finder. Gated by the closest matrix row ("Reset PIN": units / factory / system). */
+  /** /admin/employees finder. Gated by the closest matrix row ("Reset PIN": units / factory / system). */
   @RequirePermission('pin.reset', { type: 'list' })
   @Get()
-  async list(
+  list(
     @Query(new ZodValidationPipe(ListQuerySchema)) query: z.infer<typeof ListQuerySchema>,
     @Req() req: AuthedRequest,
+    @CurrentPrincipal() principal: RequestPrincipal,
   ) {
     const scope = req.listScope ?? { kind: 'none' as const };
-    return { items: await this.employees.list(scope, query.q, query.limit) };
+    return this.employees.list(scope, principal.factoryId, query);
   }
 
   @RequirePermission('pin.reset', { type: 'employeeParam', param: 'code' })
@@ -50,5 +60,23 @@ export class EmployeesController {
     @CurrentPrincipal() principal: RequestPrincipal,
   ) {
     return this.pinAuth.resetPin(principal.employeeId, code, body.reason);
+  }
+
+  /** BR-63: cost-center override; part of "manage ... mapping" (HC admin and system admin). */
+  @RequirePermission('org.manage', { type: 'employeeParam', param: 'code' })
+  @Put(':code/cost-center-override')
+  setCostCenterOverride(
+    @Param('code') code: string,
+    @Body(new ZodValidationPipe(CostCenterOverrideSchema))
+    body: z.infer<typeof CostCenterOverrideSchema>,
+    @CurrentPrincipal() principal: RequestPrincipal,
+  ) {
+    return this.employees.setCostCenterOverride(
+      principal.employeeId,
+      principal.factoryId,
+      code,
+      body.costCenterId,
+      body.reason,
+    );
   }
 }

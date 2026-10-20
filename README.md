@@ -2,7 +2,7 @@
 
 Replaces the Excel-and-paper lunch ordering at the PNJP Go Vap factory: employees register a week ahead, the system cancels meals for absent employees from DMP attendance, and the HC admin finalizes the count at 08:30 and exports a file for the caterer.
 
-Status: **Phase 0 (foundation)** is built. Menu, registration, attendance, reconciliation, delivery and reports follow in P1 to P7.
+Status: **Phase 0 (foundation)** and **Phase 1 (org structure and menu)** are built. Registration, attendance, reconciliation, delivery and reports follow in P2 to P7.
 
 ## Layout
 
@@ -12,7 +12,7 @@ Status: **Phase 0 (foundation)** is built. Menu, registration, attendance, recon
 | `apps/web`        | Next.js app (login, change PIN, role-based layout)                     |
 | `packages/shared` | Zod schemas, enums and the pure business-rule functions (`rules/`)     |
 | `docker`          | Dockerfiles, Compose file, nginx config                                |
-| `docs`            | `decisions.md`, `open-questions.md`, `demo-p0.md`                      |
+| `docs`            | `decisions.md`, `open-questions.md`, `demo-p0.md`, `demo-p1.md`        |
 
 Working rules for contributors and agents are in [AGENTS.md](AGENTS.md).
 
@@ -28,7 +28,7 @@ pnpm db:migrate && pnpm db:seed
 pnpm dev                           # API :3001, web :3000
 ```
 
-Sign in at http://localhost:3000 with `PNJP000001` and the PIN `123456`; you are asked to change it. More accounts and the full demo script: [docs/demo-p0.md](docs/demo-p0.md).
+Sign in at http://localhost:3000 with `PNJP000001` and the PIN `123456`; you are asked to change it. More accounts and the demo scripts: [docs/demo-p0.md](docs/demo-p0.md), [docs/demo-p1.md](docs/demo-p1.md).
 
 ## Quick start (Docker)
 
@@ -44,7 +44,7 @@ Open http://localhost:8080. The compose stack is development-only (mock Microsof
 ```bash
 pnpm lint
 pnpm typecheck
-pnpm test        # api tests start a throwaway PostgreSQL automatically
+pnpm test        # api tests start a throwaway PostgreSQL (or set TEST_DATABASE_URL)
 pnpm build
 ```
 

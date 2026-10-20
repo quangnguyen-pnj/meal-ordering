@@ -7,9 +7,15 @@ import { ConfigModule } from './config/config.module';
 import type { AppEnv } from './config/env';
 import { ClockModule } from './clock/clock.module';
 import { DevClockModule } from './clock/dev-clock.module';
+import { DishesModule } from './dishes/dishes.module';
 import { DmpModule } from './dmp/dmp.module';
 import { EmployeesModule } from './employees/employees.module';
 import { HealthModule } from './health/health.module';
+import { JobsModule } from './jobs/jobs.module';
+import { MasterModule } from './master/master.module';
+import { MeModule } from './me/me.module';
+import { MenuModule } from './menu/menu.module';
+import { OrgModule } from './org/org.module';
 import { PrismaModule } from './prisma/prisma.service';
 import { RbacModule } from './rbac/rbac.module';
 import { SettingsModule } from './settings/settings.module';
@@ -33,6 +39,12 @@ export class AppModule {
         AuthModule,
         RbacModule,
         EmployeesModule,
+        MasterModule,
+        OrgModule,
+        DishesModule,
+        MenuModule,
+        MeModule,
+        JobsModule,
         SystemModule,
         HealthModule,
         ...devModules,

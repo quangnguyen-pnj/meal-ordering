@@ -8,10 +8,8 @@ export interface DmpOrgNode {
   code: string;
   name: string;
   parentCode: string | null;
-  /** Level name as DMP reports it; the 1..6 mapping (BR-61, A14) is applied by the org sync (P1). */
+  /** Level name as DMP reports it; the 1..6 level is computed by the org sync (BR-61, A14). */
   levelName: string;
-  /** Depth from the root, 1-based, as derived from the tree. */
-  depth: number;
   costCenterCode: string | null;
 }
 
@@ -24,6 +22,8 @@ export interface DmpEmployee {
   costCenterCode: string | null;
   /** YYYY-MM-DD */
   startDate: string | null;
+  /** YYYY-MM-DD, last working day if DMP reports one (BR-36). */
+  endDate: string | null;
 }
 
 export interface DmpAttendanceRecord {

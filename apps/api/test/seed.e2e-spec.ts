@@ -37,7 +37,8 @@ describe('seeded database', () => {
       new Set(['DEPT_ADMIN', 'HC_ADMIN', 'SYS_ADMIN']),
     );
     const dept = await db().roleAssignment.findMany({
-      where: { role: 'DEPT_ADMIN' },
+      // Revoked assignments are kept for the record (rule 7); only live ones count.
+      where: { role: 'DEPT_ADMIN', revokedAt: null },
       include: { employee: true },
     });
     expect(dept.map((d) => d.employee.employeeCode).sort()).toEqual([

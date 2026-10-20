@@ -9,7 +9,7 @@ export interface NavItem {
   group: NavGroup;
   /** Matrix action that decides visibility (plan section 3). The API still enforces it. */
   action: Action;
-  /** Phase that delivers the real screen; shown on the placeholder page. */
+  /** Phase that completes the screen; the catch-all placeholder shows it until a page exists. */
   phase: string;
 }
 

@@ -1,4 +1,4 @@
-import { toVnDateTime } from '@meal/shared';
+import { buildDmpTree, toVnDateTime } from '@meal/shared';
 import { SEED_EMPLOYEE_COUNT } from '../../seed-data';
 import { DmpError } from '../dmp.client';
 import { HttpDmpClient } from '../http-dmp.client';
@@ -34,7 +34,9 @@ describe('MockDmpClient', () => {
     const dmp = new MockDmpClient('on-time');
     const [tree, employees] = await Promise.all([dmp.getOrgTree(), dmp.getEmployees()]);
     expect(tree.filter((n) => n.parentCode === null)).toHaveLength(1);
-    expect(Math.max(...tree.map((n) => n.depth))).toBe(6);
+    // BR-61: the tree the sync builds from it has 6 levels.
+    const built = buildDmpTree(tree);
+    expect(built.ok && Math.max(...built.nodes.map((n) => n.level))).toBe(6);
     expect(employees).toHaveLength(SEED_EMPLOYEE_COUNT);
   });
 
@@ -77,19 +79,98 @@ describe('MockDmpClient', () => {
   });
 });
 
-describe('HttpDmpClient skeleton', () => {
-  it('exposes the same interface but leaves the endpoints to P1 and P3', async () => {
-    const env = loadEnv({
-      DATABASE_URL: 'postgresql://x:x@localhost:5432/x',
-      SESSION_SECRET: 'test-secret-test-secret-test-secret-1234',
-      DMP_MODE: 'http',
-      DMP_BASE_URL: 'http://dmp.invalid',
-      DMP_SERVICE_EMAIL: 'svc@example.test',
-      DMP_SERVICE_PASSWORD: 'x',
-      DMP_COMPANY_CODE: 'PNJP',
-    });
+describe('HttpDmpClient', () => {
+  const env = loadEnv({
+    DATABASE_URL: 'postgresql://x:x@localhost:5432/x',
+    SESSION_SECRET: 'test-secret-test-secret-test-secret-1234',
+    DMP_MODE: 'http',
+    DMP_BASE_URL: 'http://dmp.invalid',
+    DMP_SERVICE_EMAIL: 'svc@example.test',
+    DMP_SERVICE_PASSWORD: 'x',
+    DMP_COMPANY_CODE: 'PNJP',
+  });
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+
+  afterEach(() => jest.restoreAllMocks());
+
+  it('leaves attendance and leave to P3', async () => {
     const http = new HttpDmpClient(env);
-    await expect(http.getEmployees()).rejects.toThrow(/P1/);
     await expect(http.getAttendance(DAY)).rejects.toThrow(/P3/);
+  });
+
+  it('logs in, then reads /api/hierarchy into a flat list of nodes with parents', async () => {
+    const calls: string[] = [];
+    jest.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      calls.push(url);
+      if (url.endsWith('/api/auth/login')) return json({ token: 't' });
+      return json({
+        code: 'ROOT',
+        name: 'PNJP',
+        levelName: 'Công ty',
+        children: [{ code: 'A', name: 'Khối A', levelName: 'Khối', children: [] }],
+      });
+    });
+    const tree = await new HttpDmpClient(env).getOrgTree();
+    expect(tree).toEqual([
+      { code: 'ROOT', name: 'PNJP', parentCode: null, levelName: 'Công ty', costCenterCode: null },
+      { code: 'A', name: 'Khối A', parentCode: 'ROOT', levelName: 'Khối', costCenterCode: null },
+    ]);
+    expect(calls).toEqual([
+      'http://dmp.invalid/api/auth/login',
+      'http://dmp.invalid/api/hierarchy',
+    ]);
+  });
+
+  it('pages through /api/hr-employees sequentially and drops personal fields', async () => {
+    const pages = [
+      {
+        content: [
+          {
+            employeeId: 'E1',
+            fullName: 'Nguyễn A',
+            email: 'a@x.test',
+            unitCode: 'A',
+            birthDate: '1990-01-01',
+            phoneNumber: '0900',
+            startWDate: '15-03-2020',
+          },
+        ],
+        last: false,
+      },
+      { content: [{ employeeId: 'E2', name: 'Trần B', unitCode: 'A' }], last: true },
+    ];
+    const urls: string[] = [];
+    jest.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/login')) return json({ token: 't' });
+      urls.push(url);
+      return json(pages[urls.length - 1]);
+    });
+    const employees = await new HttpDmpClient(env).getEmployees();
+    expect(urls.map((u) => new URL(u).searchParams.get('page'))).toEqual(['0', '1']);
+    expect(new URL(urls[0]!).searchParams.get('size')).toBe('500');
+    expect(employees).toEqual([
+      {
+        employeeCode: 'E1',
+        name: 'Nguyễn A',
+        email: 'a@x.test',
+        orgUnitCode: 'A',
+        costCenterCode: null,
+        startDate: '2020-03-15',
+        endDate: null,
+      },
+      {
+        employeeCode: 'E2',
+        name: 'Trần B',
+        email: null,
+        orgUnitCode: 'A',
+        costCenterCode: null,
+        startDate: null,
+        endDate: null,
+      },
+    ]);
+    expect(JSON.stringify(employees)).not.toMatch(/1990|0900/);
   });
 });

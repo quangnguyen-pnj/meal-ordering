@@ -3,8 +3,10 @@ import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import * as argon2 from 'argon2';
 import request from 'supertest';
+import { vnToUtc } from '@meal/shared';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/app.setup';
+import { ClockService } from '../src/clock/clock.service';
 import { loadEnv, type AppEnv } from '../src/config/env';
 import { DEMO } from '../src/seed-data';
 
@@ -17,6 +19,7 @@ export function testEnv(overrides: Record<string, string | undefined> = {}): App
     DATABASE_URL: process.env.DATABASE_URL,
     SESSION_SECRET: 'test-secret-test-secret-test-secret-1234',
     CLOCK_FAKE_ENABLED: 'true',
+    JOBS_ENABLED: 'false',
     ENTRA_MODE: 'mock',
     DMP_MODE: 'mock',
     ...overrides,
@@ -85,4 +88,33 @@ export async function signIn(
 export async function signInReady(app: INestApplication, employeeCode: string): Promise<Agent> {
   await resetEmployee(employeeCode, { pinMustChange: false });
   return signIn(app, employeeCode);
+}
+
+/**
+ * Freezes the app's clock at a Vietnam wall time. Sessions age with fake time (P0 decision), so
+ * sign in again after moving the clock more than SESSION_TTL_HOURS.
+ */
+export function setVnTime(app: INestApplication, date: string, time: string): Date {
+  const at = vnToUtc(date, time);
+  app.get(ClockService).setFakeTime(at);
+  return at;
+}
+
+export interface Endpoint {
+  method: 'get' | 'post' | 'put' | 'patch';
+  url: string;
+  body?: object;
+}
+
+/** Plan 7.1 rule 5: every admin endpoint has a 403 test. Asserts 403 for each agent. */
+export async function expectForbidden(agents: Agent[], endpoints: Endpoint[]): Promise<void> {
+  const failures: string[] = [];
+  for (const agent of agents) {
+    for (const e of endpoints) {
+      const req = agent[e.method](e.url);
+      const res = await (e.body ? req.send(e.body) : req);
+      if (res.status !== 403) failures.push(`${e.method.toUpperCase()} ${e.url} -> ${res.status}`);
+    }
+  }
+  expect(failures).toEqual([]);
 }

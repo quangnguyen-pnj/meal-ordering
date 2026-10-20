@@ -37,6 +37,8 @@ export class SystemAdminBootstrap implements OnApplicationBootstrap {
       );
       return false;
     }
+    // Any SYS_ADMIN row counts, revoked ones too: a system admin who revoked the first admin must
+    // not see the role come back at the next restart.
     if (employee.roleAssignments.some((a) => a.role === 'SYS_ADMIN')) return false;
 
     await this.prisma.roleAssignment.create({

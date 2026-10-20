@@ -28,3 +28,19 @@ export async function getSession(): Promise<SessionUser | null> {
     return null;
   }
 }
+
+/** GET an API path with the caller's session, for server components. Null on any failure. */
+export async function serverGet<T>(path: string): Promise<T | null> {
+  const store = await cookies();
+  const token = store.get(SESSION_COOKIE)?.value;
+  if (!token) return null;
+  try {
+    const res = await fetch(`${apiBase()}/api${path}`, {
+      headers: { cookie: `${SESSION_COOKIE}=${token}` },
+      cache: 'no-store',
+    });
+    return res.ok ? ((await res.json()) as T) : null;
+  } catch {
+    return null;
+  }
+}

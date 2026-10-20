@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaultSettingValue } from '../settings';
-import { isRegistrationOpen, regularCloseAt } from './deadlines';
+import { isRegistrationOpen, lastAcceptedMinute, regularCloseAt } from './deadlines';
 import { toVnDateTime } from './time';
 
 const closeRule = defaultSettingValue('registration.close');
@@ -17,6 +17,16 @@ describe('BR-03: regular registration closeAt', () => {
     expect([vn.hour, vn.minute, vn.second]).toEqual([0, 0, 0]);
     // 00:00 Vietnam on 2026-10-23 is 17:00 UTC the day before.
     expect(closeAt.toISOString()).toBe('2026-10-22T17:00:00.000Z');
+  });
+
+  it('BR-03: the UI shows 23:59 Thursday for a closeAt of 00:00 Friday', () => {
+    const shown = toVnDateTime(lastAcceptedMinute(regularCloseAt(weekStart, closeRule)));
+    expect([shown.date, shown.isoWeekday, shown.hour, shown.minute]).toEqual([
+      '2026-10-22',
+      4,
+      23,
+      59,
+    ]);
   });
 
   it('BR-03: a save at Thursday 23:59:30 is accepted', () => {

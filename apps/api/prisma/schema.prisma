@@ -1,4 +1,5 @@
-// Core schema for Phase 0 (plan 6.3). Later phases add menu, registration, attendance, etc.
+// Schema from plan 6.3. P0: core and auth; P1: menu, registration shell, forecast snapshot shell,
+// notifications and mapping imports. Later phases add attendance, finalization and delivery.
 // Never delete business data: use status / active / archivedAt (plan 7.1 rule 7).
 
 generator client {
@@ -45,6 +46,45 @@ enum SyncStatus {
   FAILED
 }
 
+/// BR-10
+enum DishType {
+  CHAY
+  CHAO
+  MAN
+}
+
+enum MealSession {
+  LUNCH
+}
+
+enum MenuWeekStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+}
+
+enum RegistrationStatus {
+  ACTIVE
+  NEEDS_RESELECT
+  CANCELLED
+}
+
+enum RegistrationSource {
+  SELF
+  ADMIN
+}
+
+enum NotificationType {
+  MENU_DISH_REPLACED
+  MENU_DISH_REMOVED
+}
+
+enum MappingImportStatus {
+  PREVIEW
+  REJECTED
+  APPLIED
+}
+
 model Factory {
   id             String   @id @default(cuid())
   code           String   @unique
@@ -60,6 +100,9 @@ model Factory {
   costCenters     CostCenter[]
   orgUnits        OrgUnit[]
   roleAssignments RoleAssignment[]
+  dishes          Dish[]
+  desserts        Dessert[]
+  menuWeeks       MenuWeek[]
 }
 
 model Setting {
@@ -95,9 +138,10 @@ model Canteen {
   supplierId String
   active     Boolean @default(true)
 
-  factory  Factory   @relation(fields: [factoryId], references: [id])
-  supplier Supplier  @relation(fields: [supplierId], references: [id])
-  orgUnits OrgUnit[]
+  factory   Factory    @relation(fields: [factoryId], references: [id])
+  supplier  Supplier   @relation(fields: [supplierId], references: [id])
+  orgUnits  OrgUnit[]
+  menuWeeks MenuWeek[]
 
   @@unique([factoryId, code])
 }
@@ -136,22 +180,26 @@ model CostCenter {
 /// Node of the up-to-6-level org tree (BR-61). floorId / canteenId / costCenterId are nullable and
 /// inherited from the nearest ancestor that has one (BR-62).
 model OrgUnit {
-  id           String   @id @default(cuid())
-  factoryId    String
-  dmpCode      String
-  name         String
+  id                String   @id @default(cuid())
+  factoryId         String
+  dmpCode           String
+  name              String
   /// 1..6 (BR-61)
-  level        Int
-  dmpLevelName String
-  parentId     String?
+  level             Int
+  dmpLevelName      String
+  parentId          String?
   /// Materialized path of ids: "/<rootId>/<id>/.../<thisId>/" (trailing slash), see rules/permissions.
-  path         String
-  isMealUnit   Boolean  @default(false)
-  floorId      String?
-  canteenId    String?
-  costCenterId String?
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
+  path              String
+  isMealUnit        Boolean  @default(false)
+  floorId           String?
+  canteenId         String?
+  costCenterId      String?
+  /// Cost center code DMP reports for the node, if any (plan section 5; kept for reference, see
+  /// open-questions Q9). Admin mapping lives in costCenterId.
+  dmpCostCenterCode String?
+  /// False when the node disappeared from DMP (never deleted).
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
 
   factory    Factory     @relation(fields: [factoryId], references: [id])
   parent     OrgUnit?    @relation("OrgTree", fields: [parentId], references: [id])
@@ -195,6 +243,9 @@ model Employee {
   roleAssignments    RoleAssignment[]
   sessions           AuthSession[]
   auditLogs          AuditLog[]
+  registrations      Registration[]
+  forecastLines      ForecastLine[]
+  notifications      Notification[]
 
   @@index([orgUnitId])
   @@index([mealUnitId])
@@ -209,6 +260,8 @@ model RoleAssignment {
   /// Only for DEPT_ADMIN: the org node (and its children) they manage.
   orgUnitId  String?
   createdAt  DateTime       @default(now())
+  /// Revoked assignments are kept for the record (never deleted); only rows with null count.
+  revokedAt  DateTime?
 
   employee Employee @relation(fields: [employeeId], references: [id])
   factory  Factory  @relation(fields: [factoryId], references: [id])
@@ -262,6 +315,186 @@ model SyncRun {
   status      SyncStatus
   recordCount Int?
   error       String?
+  /// Counts and warnings (e.g. employees skipped because their org node is unknown).
+  details     Json?
 
   @@index([type, startedAt])
+}
+
+/// BR-10: main-dish library, reused across weeks; archived, never deleted.
+model Dish {
+  id         String        @id @default(cuid())
+  factoryId  String
+  name       String
+  type       DishType
+  sessions   MealSession[]
+  archivedAt DateTime?
+  createdAt  DateTime      @default(now())
+
+  factory   Factory    @relation(fields: [factoryId], references: [id])
+  menuItems MenuItem[]
+
+  @@index([factoryId, type])
+}
+
+/// BR-10: dessert library; display-only on a day (BR-11).
+model Dessert {
+  id         String    @id @default(cuid())
+  factoryId  String
+  name       String
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  factory  Factory          @relation(fields: [factoryId], references: [id])
+  menuDays MenuDayDessert[]
+}
+
+/// BR-15: one menu per canteen and week. closeAt is computed at publish (BR-03, BR-04).
+model MenuWeek {
+  id            String         @id @default(cuid())
+  factoryId     String
+  canteenId     String
+  /// Monday of week N.
+  weekStart     DateTime       @db.Date
+  status        MenuWeekStatus @default(DRAFT)
+  publishedAt   DateTime?
+  publishedById String?
+  closeAt       DateTime?
+  /// Set by the close-week job when the forecast snapshot is taken (P2).
+  closedAt      DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  factory       Factory        @relation(fields: [factoryId], references: [id])
+  canteen       Canteen        @relation(fields: [canteenId], references: [id])
+  days          MenuDay[]
+  forecastLines ForecastLine[]
+
+  @@unique([canteenId, weekStart])
+  @@index([factoryId, weekStart])
+}
+
+/// BR-08: Saturday is turned on per week; holidays are marked not served.
+model MenuDay {
+  id         String   @id @default(cuid())
+  menuWeekId String
+  date       DateTime @db.Date
+  isServing  Boolean
+
+  menuWeek MenuWeek         @relation(fields: [menuWeekId], references: [id])
+  items    MenuItem[]
+  desserts MenuDayDessert[]
+
+  @@unique([menuWeekId, date])
+}
+
+/// One selectable meal. Removed or replaced items are kept with removedAt (BR-14, rule 7).
+model MenuItem {
+  id               String      @id @default(cuid())
+  menuDayId        String
+  session          MealSession @default(LUNCH)
+  dishId           String
+  sortOrder        Int
+  removedAt        DateTime?
+  /// BR-14: the item that replaced this one; its registrations moved there.
+  replacedByItemId String?
+
+  menuDay       MenuDay        @relation(fields: [menuDayId], references: [id])
+  dish          Dish           @relation(fields: [dishId], references: [id])
+  replacedBy    MenuItem?      @relation("MenuItemReplacement", fields: [replacedByItemId], references: [id])
+  replaces      MenuItem[]     @relation("MenuItemReplacement")
+  registrations Registration[]
+  forecastLines ForecastLine[]
+
+  @@index([menuDayId])
+}
+
+model MenuDayDessert {
+  id        String    @id @default(cuid())
+  menuDayId String
+  dessertId String
+  sortOrder Int       @default(0)
+  removedAt DateTime?
+
+  menuDay MenuDay @relation(fields: [menuDayId], references: [id])
+  dessert Dessert @relation(fields: [dessertId], references: [id])
+
+  @@index([menuDayId])
+}
+
+/// BR-20: quantity per employee per menu item. Created in P1 only so BR-14 can move or flag
+/// registrations when a published menu changes; the registration flows arrive in P2.
+model Registration {
+  id          String             @id @default(cuid())
+  employeeId  String
+  menuItemId  String
+  date        DateTime           @db.Date
+  session     MealSession        @default(LUNCH)
+  quantity    Int
+  source      RegistrationSource
+  isExtra     Boolean            @default(false)
+  extraReason String?
+  status      RegistrationStatus @default(ACTIVE)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id])
+
+  @@unique([employeeId, menuItemId])
+  @@index([date, session])
+}
+
+/// BR-07 / BR-64: immutable forecast snapshot with the mapping in effect at closeAt. Write-once:
+/// a database trigger rejects UPDATE and DELETE. Rows are written by the close-week job (P2).
+model ForecastLine {
+  id           String      @id @default(cuid())
+  menuWeekId   String
+  employeeId   String
+  date         DateTime    @db.Date
+  session      MealSession
+  menuItemId   String
+  quantity     Int
+  mealUnitId   String?
+  floorId      String?
+  canteenId    String?
+  costCenterId String?
+  createdAt    DateTime    @default(now())
+
+  menuWeek MenuWeek @relation(fields: [menuWeekId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id])
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id])
+
+  @@index([menuWeekId])
+  @@index([date, session])
+}
+
+/// In-app notices (BR-14).
+model Notification {
+  id         String           @id @default(cuid())
+  employeeId String
+  type       NotificationType
+  payload    Json
+  readAt     DateTime?
+  createdAt  DateTime
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId, readAt])
+}
+
+/// BR-64: an uploaded mapping file. Validated into PREVIEW (or REJECTED), then applied all at once.
+model MappingImport {
+  id           String              @id @default(cuid())
+  factoryId    String
+  fileName     String
+  uploadedById String
+  status       MappingImportStatus
+  rowCount     Int
+  errorCount   Int
+  /// Parsed rows (PREVIEW) or row-level errors (REJECTED).
+  rows         Json
+  errors       Json
+  createdAt    DateTime
+  appliedAt    DateTime?
 }

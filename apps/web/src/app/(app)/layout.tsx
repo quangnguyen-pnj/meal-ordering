@@ -1,20 +1,21 @@
+import type { BannerView } from '@meal/shared';
 import { redirect } from 'next/navigation';
 import { AppShell } from '@/components/app-shell/app-shell';
-import type { Banner } from '@/components/app-shell/banner-area';
-import { getSession } from '@/lib/server-api';
+import { toBanners } from '@/lib/banners';
+import { getSession, serverGet } from '@/lib/server-api';
 
 export const dynamic = 'force-dynamic';
-
-// Later phases fill this: menu not published (P1), attendance sync failed (P3), day not finalized (P4).
-const BANNERS: Banner[] = [];
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await getSession();
   if (!user) redirect('/login');
   if (user.pinMustChange) redirect('/change-pin');
 
+  // BR-06 and BR-14 now; attendance sync failed (P3) and day not finalized (P4) join later.
+  const banners = await serverGet<{ items: BannerView[] }>('/me/banners');
+
   return (
-    <AppShell user={user} banners={BANNERS}>
+    <AppShell user={user} banners={toBanners(banners?.items ?? [])}>
       {children}
     </AppShell>
   );

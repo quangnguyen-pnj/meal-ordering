@@ -61,3 +61,50 @@ Choices made while building, where the plan (`docs/plan.md`, MVP Plan v1.1) was 
 - **Tests use a real PostgreSQL without Docker** (`embedded-postgres`, started by `apps/api/test/global-setup.ts`, initialised as UTF8 because the Windows default code page cannot store Vietnamese). `pnpm --filter @meal/api db:local` runs the same thing as a persistent dev database. Set `TEST_DATABASE_URL` to use an existing empty database instead.
 - The compose stack runs with `NODE_ENV=development` and seeds on start so there is something to sign in with; production needs `ENTRA_MODE=oidc`, a real `SESSION_SECRET` and no seed.
 - The API image keeps dev dependencies because the entrypoint needs the Prisma CLI (`migrate deploy`) and `tsx` (seed). Slimming it is a P7 job.
+
+## Phase 1 – Org structure and menu
+
+### Data model
+
+- **Migration `20261020000000_p1_org_menu`** adds `Dish`, `Dessert`, `MenuWeek`, `MenuDay`, `MenuItem`, `MenuDayDessert`, `Registration`, `ForecastLine`, `Notification`, `MappingImport`, plus `OrgUnit.dmpCostCenterCode`, `RoleAssignment.revokedAt` and `SyncRun.details`.
+- **`Registration` and `ForecastLine` exist from P1, without their flows.** BR-14 (P1) has to move or flag registrations, and the P1 exit criterion "changing a mapping leaves existing snapshot rows unchanged" needs snapshot rows. Registration flows and the close-week job that writes `ForecastLine` stay in P2.
+- **`ForecastLine` is write-once in the database**: a trigger rejects `UPDATE` and `DELETE` (rule 7). `FinalEmployeeLine` and `FinalCount` get the same trigger in P4.
+- **Nothing on a menu is deleted.** Removed or replaced items and desserts get `removedAt`. A replaced item points to its replacement (`replacedByItemId`). BR-14's "move registrations to the replacement" is done literally: a new item is created and the registrations move to it, so forecast lines keep the item they were taken against.
+- **Role assignments are revoked, not deleted** (`revokedAt`). Revocation takes effect on the next request, because the principal is loaded on every request. `FIRST_SYSTEM_ADMIN_CODE` does not re-grant a revoked first admin.
+
+### Rules (packages/shared)
+
+- `computeCloseAt` (BR-03, BR-04): published before the regular closeAt keeps it; at or after it, closeAt = publish + `registration.latePublishHours`. Publishing at exactly Friday 00:00 is already late, because closeAt is exclusive.
+- `dayFreeEditDeadline` (BR-05) = the earlier of closeAt and the day's own `day.lockTime`.
+- `lastAcceptedMinute` (BR-03 display): screens show closeAt minus one minute, worded "đến hết 23:59" ("until 23:59"). The same applies to a late closeAt (see Q19).
+- `menuPublishWarnAt` / `isMenuPublishWarningDue` / `upcomingWeekStart` (BR-06): the warning concerns next Monday's week and starts at `menu.publishWarnAt` of the current week.
+- `checkMenuMix` (BR-13): the usual mix (1 Chay, 1 Cháo, 2–3 Mặn) is a constant in the rule, not a setting; plan 6.4 has no key for it. It only warns.
+- `planMenuDayEdit` (BR-11, BR-14): a saved day is a list of `{ id?, dishId }`. An existing id with a new dish is a replacement, a missing id is a removal, and the same dish twice on a day is rejected.
+- `buildDmpTree` / `mapDmpLevel` (BR-61): the level is the depth from the root (assumption A14). Any duplicate code, unknown parent, cycle or 7th level rejects the whole tree.
+- `validateMappingRows` (BR-64): a row states the complete mapping of its target, and a blank cell means "inherit". Exporting and re-importing the same file therefore changes nothing; a test proves the round trip. Employee rows may only set the cost center (BR-63).
+
+### API
+
+- **New endpoints**, all behind the guard with a 403 test each: `/api/admin/dishes`, `/api/admin/desserts` (`dishes.manage`); `/api/admin/menu/*` (`menu.manage`); `/api/menu/my-week` (`menu.registerOwn`, self); `/api/admin/master/*` and `/api/admin/org/*` (`org.manage`; sync is `sync.manage`); `/api/employees/:code/cost-center-override` (`org.manage`); `/api/admin/settings`, `/api/admin/supplier` (`settings.manage`); `/api/system/roles` (`roles.assignPrivileged`); `/api/me/banners`, `/api/me/notifications/:id/read` (any signed-in user, always filtered to the caller).
+- **`GET /api/employees`** now returns the resolved meal unit, floor, canteen and cost center (with names and source), and filters by org node, floor, canteen, cost center, meal status and status. Floor, canteen and cost center are inherited values, so it filters after resolution in memory (about 1,700 employees).
+- **Mapping import** is multipart (`file`, max 5 MB). The upload is validated and stored as `MappingImport` (PREVIEW or REJECTED); applying re-validates against current master data, locks the import row (`FOR UPDATE`) and writes every change plus one audit entry per changed target in one transaction. The second sheet of the export lists the valid codes.
+- **Org sync** reads DMP first, validates, then writes everything in one transaction under a Postgres advisory lock. It never touches meal-unit flags or mapping, deactivates nodes missing from DMP, creates DMP-sourced cost centers it has not seen, recomputes meal units, then calls `SystemAdminBootstrap.ensure()`. Employees whose node is unknown are skipped and listed in `SyncRun.details`. New employees have no PIN, so they sign in with Microsoft or get a PIN reset.
+- **`HttpDmpClient.getOrgTree` / `getEmployees`** are implemented with sequential pages of 500. Field names are a best reading of the survey and live in `dmp-parsers.ts` with a TODO (Q17).
+- **Publishing a menu needs a saved week** and is a conditional update, so two clicks cannot both publish. A published week stays editable under BR-14 except for days whose lock has passed (Q15) and turning a serving day off (Q16).
+- **BR-14 notices** go only to employees with registrations on the changed item. They are shown as dismissable banners.
+
+### Jobs
+
+- **pg-boss 10** (CommonJS; v11+ is ESM-only), in schema `pgboss`, both jobs scheduled with `tz: Asia/Ho_Chi_Minh`. `sync-org-employees` runs at 02:00. `menu-publish-warning` runs hourly and checks `menu.publishWarnAt` itself, so a changed setting needs no new schedule. The BR-06 banner is computed on every request, so the job only logs.
+- **`JOBS_ENABLED`** (default true) turns pg-boss off; tests set it false and call the handlers directly.
+
+### Web
+
+- Screens: `/admin/dishes`, `/admin/menu`, `/admin/master`, `/admin/org`, `/admin/employees`, `/admin/settings`, `/system`, and `/week`, which shows the published menu read-only until registration arrives in P2. Other routes still use the placeholder.
+- **Menu builder:** the week draft lives in a Zustand store (`lib/menu-builder-store.ts`, unit-tested); dnd-kit drags library entries onto day columns. Every drag action also has a button (select a day, then "Thêm"), so it works with a keyboard and on a tablet. The mix warning is computed live with the shared rule.
+- The layout fetches `/api/me/banners` on every request. Notices can be dismissed.
+
+### Tooling
+
+- **`pnpm dev` for the API was broken in P0**: `tsx` (esbuild) emits no decorator metadata, so Nest cannot inject anything. It now uses `tsc-watch` and runs the compiled output.
+- **Tests on Linux without the embedded PostgreSQL's ICU 60:** set `TEST_DATABASE_URL` to an empty disposable database (the existing escape hatch). Test files clean up what they create, except `ForecastLine` rows, which are write-once by design.

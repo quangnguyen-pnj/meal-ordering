@@ -61,3 +61,12 @@ export class ApiExceptionFilter implements ExceptionFilter {
     res.status(500).json(body);
   }
 }
+
+export const notFound = (what = 'Not found') =>
+  new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', what);
+export const invalid = (message: string, details?: unknown) =>
+  new ApiException(HttpStatus.BAD_REQUEST, 'VALIDATION_FAILED', message, { details });
+export const conflict = (message: string, details?: unknown) =>
+  new ApiException(HttpStatus.CONFLICT, 'CONFLICT', message, { details });
+export const invalidState = (message: string, details?: unknown) =>
+  new ApiException(HttpStatus.CONFLICT, 'INVALID_STATE', message, { details });
