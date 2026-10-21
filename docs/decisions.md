@@ -79,6 +79,7 @@ Choices made while building, where the plan (`docs/plan.md`, MVP Plan v1.1) was 
 - `dayFreeEditDeadline` (BR-05) = the earlier of closeAt and the day's own `day.lockTime`.
 - `lastAcceptedMinute` (BR-03 display): screens show closeAt minus one minute, worded "đến hết 23:59" ("until 23:59"). The same applies to a late closeAt (see Q19).
 - `menuPublishWarnAt` / `isMenuPublishWarningDue` / `upcomingWeekStart` (BR-06): the warning concerns next Monday's week and starts at `menu.publishWarnAt` of the current week.
+- `mealDisplayName` (BR-12) shows `[Loại] Tên món`, e.g. "[Chay] Gạo lứt muối mè", with literal brackets. The plan's example "Mặn Cá kho tộ" has none; the product owner chose brackets on 2026-10-21.
 - `checkMenuMix` (BR-13): the usual mix (1 Chay, 1 Cháo, 2–3 Mặn) is a constant in the rule, not a setting; plan 6.4 has no key for it. It only warns.
 - `planMenuDayEdit` (BR-11, BR-14): a saved day is a list of `{ id?, dishId }`. An existing id with a new dish is a replacement, a missing id is a removal, and the same dish twice on a day is rejected.
 - `buildDmpTree` / `mapDmpLevel` (BR-61): the level is the depth from the root (assumption A14). Any duplicate code, unknown parent, cycle or 7th level rejects the whole tree.

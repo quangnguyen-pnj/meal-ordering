@@ -18,8 +18,8 @@ const view = {
       date: '2027-03-01',
       isServing: true,
       items: [
-        { id: 'i1', dishId: 'ca', dishName: 'Cá', type: 'MAN', displayName: 'Mặn Cá' },
-        { id: 'i2', dishId: 'thit', dishName: 'Thịt', type: 'MAN', displayName: 'Mặn Thịt' },
+        { id: 'i1', dishId: 'ca', dishName: 'Cá', type: 'MAN', displayName: '[Mặn] Cá' },
+        { id: 'i2', dishId: 'thit', dishName: 'Thịt', type: 'MAN', displayName: '[Mặn] Thịt' },
       ],
       desserts: [{ id: 'chuoi', name: 'Chuối' }],
       mix: null,
