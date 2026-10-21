@@ -151,7 +151,7 @@ export const vi = {
     nextWeek: 'Tuần sau',
     backToUpcoming: 'Về tuần sắp tới',
     library: 'Thư viện món',
-    libraryHint: 'Kéo món vào ngày, hoặc bấm “Thêm món” ở từng ngày.',
+    libraryHint: 'Kéo món vào một ngày để thêm; thả đè lên một món để đổi món đó.',
     libraryEmpty: 'Thư viện chưa có món. Thêm món ở trang Thư viện món.',
     addDish: 'Thêm món',
     searchDish: 'Tìm món',
@@ -166,6 +166,9 @@ export const vi = {
     disableDay: 'Tắt (nghỉ lễ)',
     emptyDay: 'Chưa có món',
     replaceWith: 'Đổi thành',
+    dropToReplace: 'Thả để đổi món',
+    dropToAdd: 'Thêm vào {day}',
+    dropToReplaceDish: 'Đổi món {dish}',
     locked: 'Đã khóa (qua giờ chốt)',
     status: {
       NEW: 'Chưa tạo',

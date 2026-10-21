@@ -131,3 +131,10 @@ A UI/UX pass over every P1 screen, asked for after a review. No business rule ch
 - **Dialogs return focus to their opener.** Radix only does that for a `Dialog.Trigger`; ours open from code (row menus, handlers), so `AppDialog` and `useConfirm` remember the opener when they open. Confirmations use AlertDialog (Cancel has the first focus, a click outside does nothing); the one-time PIN is an AlertDialog too.
 - **Success messages are toasts** (Sonner), with "Hoàn tác" where a change can be reversed (org mapping, archiving a dish). Errors stay inline next to what failed.
 - **Kept outside shadcn:** the org tree (no tree primitive), the menu builder's drag-and-drop (dnd-kit), the 24-hour time and PIN fields (built on Input).
+
+### Menu builder drag and drop, and the block style
+
+- **Dragging uses a `DragOverlay`** rendered on `document.body`. The library scrolls (`overflow-y: auto`), so a dish moved by a transform inside it was clipped as soon as it left the library. The entry stays in place, dimmed, and the moving copy says what the drop will do ("Thêm vào Thứ Ba" / "Đổi món …").
+- **Dropping a dish on a dish replaces it** (BR-14 once published); dropping it anywhere else on the day adds it; a dessert always joins the day. With a pointer the dish under the cursor wins over its day (`pointerWithin`); keyboard drags use the nearest target. `resolveDrop` holds the rule and is unit-tested.
+- **Below 1024 px (`lg`)** the library is hidden, so each day shows "+ Thêm món" and each published dish its "Đổi thành" select. From 1024 px up both are hidden and drag and drop is the only way (by choice of the administration).
+- **Blocks are set apart by shadows, not borders**, on a faint warm page background (`--canvas`). Tokens in `tailwind.config.ts`: `shadow-block` (cards, panels, rows), `shadow-raised` (menus, popovers, select lists), `shadow-overlay` (dialogs, sheets, the drag copy). Not `shadow-card`: `card` is also a colour, and Tailwind would then generate a white shadow colour for the same class. Inputs keep their borders; tables keep light row dividers. Inner padding went from 12 to 16 px and page padding to 32 px on desktop.

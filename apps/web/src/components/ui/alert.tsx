@@ -4,14 +4,13 @@ import { cn } from '@/lib/utils';
 
 // shadcn/ui Alert with an extra "warning" variant for BR-06 style notices.
 const alertVariants = cva(
-  'relative w-full rounded-lg border px-4 py-3 text-sm [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:text-foreground [&>svg~*]:pl-7',
+  'relative w-full rounded-lg px-4 py-3 text-sm [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:text-foreground [&>svg~*]:pl-7',
   {
     variants: {
       variant: {
         default: 'bg-muted/60 text-foreground',
-        warning: 'border-warning/50 bg-warning/15 text-foreground',
-        destructive:
-          'border-destructive/50 bg-destructive/10 text-foreground [&>svg]:text-destructive',
+        warning: 'bg-warning/15 text-foreground',
+        destructive: 'bg-destructive/10 text-foreground [&>svg]:text-destructive',
       },
     },
     defaultVariants: { variant: 'default' },

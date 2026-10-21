@@ -283,7 +283,7 @@ export function EmployeesScreen({ canManageOrg }: { canManageOrg: boolean }) {
               {items.map((e) => (
                 <li
                   key={e.employeeCode}
-                  className={`rounded-md border p-3 text-sm ${e.status === 'LEFT' ? 'text-muted-foreground' : ''}`}
+                  className={`rounded-lg bg-card p-4 text-sm shadow-block ${e.status === 'LEFT' ? 'text-muted-foreground' : ''}`}
                 >
                   <p className="font-medium">
                     {e.name}{' '}
@@ -339,7 +339,7 @@ export function EmployeesScreen({ canManageOrg }: { canManageOrg: boolean }) {
                         {e.employeeCode}
                       </span>
                     </TableCell>
-                    <TableCell className="min-w-44 max-w-60 text-xs">
+                    <TableCell className="min-w-36 max-w-44 text-xs">
                       <Tooltip>
                         <TooltipTrigger className="text-left">
                           {shortOrgPath(e.orgPath)}
@@ -353,7 +353,7 @@ export function EmployeesScreen({ canManageOrg }: { canManageOrg: boolean }) {
                     <TableCell className="whitespace-nowrap">
                       {e.floorName ?? t('common.none')}
                     </TableCell>
-                    <TableCell className="min-w-52">
+                    <TableCell className="min-w-44">
                       <CostCenter e={e} />
                     </TableCell>
                     <TableCell className="text-xs">{roleText(e)}</TableCell>
@@ -365,7 +365,7 @@ export function EmployeesScreen({ canManageOrg }: { canManageOrg: boolean }) {
               </TableBody>
             </Table>
             {total === 0 ? (
-              <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+              <p className="rounded-lg bg-muted/50 p-8 text-center text-sm text-muted-foreground">
                 {t('employees.empty')}
               </p>
             ) : null}
@@ -403,7 +403,7 @@ export function EmployeesScreen({ canManageOrg }: { canManageOrg: boolean }) {
               {tempPin ? `${tempPin.name} · ${tempPin.code}` : ''}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <p className="rounded-md border bg-muted py-4 text-center font-mono text-4xl font-semibold tracking-[0.3em]">
+          <p className="rounded-lg bg-muted py-4 text-center font-mono text-4xl font-semibold tracking-[0.3em]">
             {tempPin?.pin}
           </p>
           <Alert variant="warning">{t('employees.temporaryPinHint')}</Alert>

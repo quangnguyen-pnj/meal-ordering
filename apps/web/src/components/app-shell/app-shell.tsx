@@ -7,7 +7,6 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { Spinner } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -143,7 +142,7 @@ export function AppShell({
 
   return (
     <div className="min-h-screen md:flex">
-      <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-card px-4 md:hidden">
+      <header className="sticky top-0 z-30 flex h-14 items-center justify-between bg-card px-4 shadow-block md:hidden">
         <span className="font-semibold">{t('app.name')}</span>
         <Button
           variant="ghost"
@@ -165,14 +164,13 @@ export function AppShell({
             <SheetDescription>{t('app.factory')}</SheetDescription>
           </div>
           <div className="flex-1 overflow-y-auto">{navigation}</div>
-          <Separator />
-          <div className="flex items-center justify-between gap-3 p-4">
+          <div className="flex items-center justify-between gap-3 bg-muted/40 p-4">
             <UserBlock user={user} onSignOut={signOut} />
           </div>
         </SheetContent>
       </Sheet>
 
-      <aside className="hidden border-r bg-card md:sticky md:top-0 md:flex md:h-screen md:w-64 md:shrink-0 md:flex-col md:overflow-y-auto">
+      <aside className="hidden bg-card shadow-block md:sticky md:top-0 md:flex md:h-screen md:w-64 md:shrink-0 md:flex-col md:overflow-y-auto">
         <div className="px-4 py-5">
           <p className="text-lg font-semibold">{t('app.name')}</p>
           <p className="text-sm text-muted-foreground">{t('app.factory')}</p>
@@ -181,10 +179,10 @@ export function AppShell({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="hidden items-center justify-end gap-3 border-b px-4 py-2 md:flex">
+        <div className="hidden items-center justify-end gap-3 px-4 py-2 md:flex md:px-6">
           <UserBlock user={user} onSignOut={signOut} />
         </div>
-        <main className="flex flex-1 flex-col gap-4 p-4 md:p-6">
+        <main className="flex flex-1 flex-col gap-5 p-4 md:gap-6 md:p-8">
           <BannerArea banners={banners} />
           {children}
         </main>

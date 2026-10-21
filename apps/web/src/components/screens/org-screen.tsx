@@ -246,7 +246,7 @@ function TreeTab() {
             {t('org.collapseAll')}
           </Button>
         </div>
-        <ul className="rounded-md border p-2">
+        <ul className="rounded-lg bg-card p-2 shadow-block">
           {(children.get(null) ?? []).map((n) => renderNode(n, 0))}
         </ul>
       </div>
@@ -254,7 +254,7 @@ function TreeTab() {
         {selected ? (
           <NodeDetail key={selected.id} node={selected} byId={byId} />
         ) : (
-          <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+          <p className="rounded-lg bg-muted/50 p-8 text-center text-sm text-muted-foreground">
             {t('org.selectNode')}
           </p>
         )}
@@ -355,7 +355,7 @@ function NodeDetail({ node, byId }: { node: OrgUnitView; byId: Map<string, OrgUn
   };
 
   return (
-    <div className="flex flex-col gap-4 rounded-md border p-4">
+    <div className="flex flex-col gap-5 rounded-lg bg-card p-5 shadow-block">
       {confirmElement}
       <div>
         <p className="font-medium">{node.name}</p>

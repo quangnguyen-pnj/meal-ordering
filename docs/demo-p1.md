@@ -33,11 +33,11 @@ The same file covers BR-05 (`dayFreeEditDeadline`) and BR-06 (the warning starts
 1. Sign in as `PNJP000003`. The yellow banner says next week's menu is not published (BR-06) whenever it is past Monday 12:00.
 2. **Thư viện món** (`/admin/dishes`): add a few main dishes (one Chay, one Cháo, two or three Mặn) and a dessert. The display name follows BR-12 ("Mặn Cá kho tộ"). Archive one: it leaves the list and the menu library but is kept.
 3. **Thực đơn tuần** (`/admin/menu`): pick the canteen; the coming week is preselected and shows "Nếu công bố bây giờ, hạn đăng ký là đến hết …".
-   - Drag dishes from the library onto a day, or press "Thêm món" on a day and pick from the list (the only way on a phone). Add the dessert too.
+   - Drag dishes from the library onto a day; drop one on a dish already there to replace it. Below 1024 px the library is hidden: press "Thêm món" on a day and pick from the list. Add the dessert too.
    - A day with an unusual mix shows a yellow note (BR-13); it never blocks.
    - "Bật phục vụ" on Saturday turns it on for this week; "Tắt (nghỉ lễ)" marks a holiday (BR-08).
 4. **Lưu bản nháp**, then **Công bố**. The badge turns "Đã công bố" and the deadline is fixed.
-5. Edit after publishing (BR-14): use the "Đổi thành" select under a dish, or remove one, optionally type a reason, then **Lưu thay đổi**. The message counts moved and flagged registrations and notified employees. Real registrations arrive in P2; the e2e test inserts some to prove the effect. Days whose 08:00 has passed are locked.
+5. Edit after publishing (BR-14): drag a dish from the library onto the dish to replace (below 1024 px: the "Đổi thành" select under it), or remove one, optionally type a reason, then **Lưu thay đổi**. The message counts moved and flagged registrations and notified employees. Real registrations arrive in P2; the e2e test inserts some to prove the effect. Days whose 08:00 has passed are locked.
 
 Automated: `apps/api/test/menu.e2e-spec.ts` ("building and publishing a week", "BR-14", "BR-04: late publish").
 

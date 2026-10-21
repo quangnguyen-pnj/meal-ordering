@@ -169,7 +169,7 @@ export function SettingsScreen() {
         <CardContent className="flex flex-col gap-6">
           {list.isLoading ? <LoadingRows rows={6} /> : null}
           {GROUPS.map((group) => (
-            <section key={group.key} className="flex flex-col gap-2">
+            <section key={group.key} className="flex flex-col gap-3">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 {vi.settings.groups[group.key]}
               </h2>
@@ -197,7 +197,7 @@ export function SettingsScreen() {
         <div
           role="region"
           aria-label={t('settings.saveBar')}
-          className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center justify-between gap-3 border-t bg-card px-4 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] md:-mx-6 md:px-6"
+          className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center justify-between gap-3 bg-card px-4 py-3 shadow-[0_-6px_16px_-6px_rgb(41_37_36/0.12)] md:-mx-8 md:px-8"
         >
           <p className="text-sm" role="status">
             {invalidKeys.length > 0
@@ -254,8 +254,8 @@ function SettingRow({
   return (
     <div
       className={cn(
-        'flex flex-col gap-2 rounded-md border p-3 transition-colors md:flex-row md:items-start md:justify-between md:gap-6',
-        changed && 'border-primary/60 bg-primary/5',
+        'flex flex-col gap-3 rounded-lg bg-card p-4 shadow-block transition-[box-shadow,background-color] md:flex-row md:items-start md:justify-between md:gap-6',
+        changed && 'bg-primary/5 ring-1 ring-primary/40',
       )}
     >
       <div className="flex flex-col gap-1 md:w-1/2">

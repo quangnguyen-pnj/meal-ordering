@@ -61,9 +61,9 @@ export function WeekMenuScreen() {
               {t('week.canteen', { canteen: data.menu.canteenName })} ·{' '}
               <strong>{t('week.closeAt', { time: formatCloseAt(data.menu.closeAt) })}</strong>
             </p>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {data.menu.days.map((day) => (
-                <section key={day.date} className="rounded-md border p-3">
+                <section key={day.date} className="rounded-lg bg-card p-4 shadow-block">
                   <h2 className="font-medium">
                     {vi.weekdays[isoWeekdayOf(day.date) as keyof typeof vi.weekdays]}{' '}
                     <span className="text-sm font-normal text-muted-foreground">
