@@ -4,9 +4,9 @@
   "private": true,
   "scripts": {
     "build": "prisma generate && tsc -p tsconfig.build.json",
-    "dev": "prisma generate && dotenv -e ../../.env -- tsc-watch -p tsconfig.build.json --noClear --onSuccess \"node dist/main.js\"",
+    "dev": "tsx scripts/prisma-generate.ts && dotenv -e ../../.env -- tsc-watch -p tsconfig.build.json --noClear --onSuccess \"node dist/main.js\"",
     "start": "node dist/main.js",
-    "typecheck": "prisma generate && tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsx scripts/prisma-generate.ts && tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
     "test": "jest",
     "db:generate": "prisma generate",
