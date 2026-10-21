@@ -8,9 +8,12 @@ export const DISH_TYPE_LABELS: Readonly<Record<DishType, string>> = {
   MAN: 'Mặn',
 };
 
-/** BR-12: a meal is shown as "[Type] [Dish name]", e.g. "Mặn Cá kho tộ". */
+/**
+ * BR-12: a meal is shown as its type in brackets, then the dish name, e.g.
+ * "[Chay] Gạo lứt muối mè". The brackets are literal (product owner's choice, 2026-10-21).
+ */
 export function mealDisplayName(type: DishType, dishName: string): string {
-  return `${DISH_TYPE_LABELS[type]} ${dishName.trim()}`;
+  return `[${DISH_TYPE_LABELS[type]}] ${dishName.trim()}`;
 }
 
 /**
