@@ -13,9 +13,11 @@ import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
+import { LoadingRows } from '@/components/ui/skeleton';
 import { Table, Td, Th } from '@/components/ui/table';
 import { Tabs } from '@/components/ui/tabs';
 import { api } from '@/lib/api';
@@ -81,7 +83,7 @@ function MainDishes() {
   });
 
   const items = (list.data?.items ?? []).filter((d) => !filter || d.type === filter);
-  const error = save.error ?? archive.error ?? list.error;
+  const error = archive.error ?? list.error;
 
   return (
     <div className="flex flex-col gap-4">
@@ -109,65 +111,76 @@ function MainDishes() {
           />
           {t('dishes.showArchived')}
         </label>
-        <Button className="ml-auto" onClick={() => setEditing({ id: null, name: '', type: 'MAN' })}>
+        <Button
+          className="ml-auto"
+          onClick={() => {
+            save.reset();
+            setEditing({ id: null, name: '', type: 'MAN' });
+          }}
+        >
           {t('dishes.addMain')}
         </Button>
       </div>
 
-      {editing ? (
-        <form
-          className="flex flex-wrap items-end gap-3 rounded-md border p-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            save.mutate(editing);
-          }}
-        >
-          <div className="flex min-w-60 flex-1 flex-col gap-2">
-            <Label htmlFor="dish-name">{t('common.name')}</Label>
-            <Input
-              id="dish-name"
-              required
-              autoFocus
-              maxLength={120}
-              placeholder={t('dishes.namePlaceholder')}
-              value={editing.name}
-              onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+      <Dialog
+        open={editing !== null}
+        onClose={() => setEditing(null)}
+        title={editing?.id ? t('dishes.editMain') : t('dishes.addMain')}
+      >
+        {editing ? (
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              save.mutate(editing);
+            }}
+          >
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="dish-name">{t('common.name')}</Label>
+              <Input
+                id="dish-name"
+                required
+                data-autofocus
+                maxLength={120}
+                placeholder={t('dishes.namePlaceholder')}
+                value={editing.name}
+                onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="dish-type">{t('dishes.type')}</Label>
+              <Select
+                id="dish-type"
+                value={editing.type}
+                onChange={(e) => setEditing({ ...editing, type: e.target.value as DishType })}
+              >
+                {DISH_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {vi.dishTypes[type]}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {t('dishes.displayName')}:{' '}
+              <strong className="text-foreground">
+                {editing.name.trim() ? mealDisplayName(editing.type, editing.name) : '…'}
+              </strong>
+            </p>
+            {save.error ? <Alert variant="error">{apiErrorText(save.error)}</Alert> : null}
+            <DialogActions
+              pending={save.isPending}
+              disabled={!editing.name.trim()}
+              onCancel={() => setEditing(null)}
             />
-          </div>
-          <div className="flex w-40 flex-col gap-2">
-            <Label htmlFor="dish-type">{t('dishes.type')}</Label>
-            <Select
-              id="dish-type"
-              value={editing.type}
-              onChange={(e) => setEditing({ ...editing, type: e.target.value as DishType })}
-            >
-              {DISH_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {vi.dishTypes[type]}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <p className="min-h-11 py-3 text-sm text-muted-foreground">
-            {t('dishes.displayName')}:{' '}
-            <strong>
-              {editing.name.trim() ? mealDisplayName(editing.type, editing.name) : '…'}
-            </strong>
-          </p>
-          <div className="flex gap-2">
-            <Button type="submit" disabled={save.isPending || !editing.name.trim()}>
-              {save.isPending ? t('common.saving') : t('common.save')}
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setEditing(null)}>
-              {t('common.cancel')}
-            </Button>
-          </div>
-        </form>
-      ) : null}
+          </form>
+        ) : null}
+      </Dialog>
 
       {error ? <Alert variant="error">{apiErrorText(error)}</Alert> : null}
 
-      <Table>
+      {list.isLoading ? <LoadingRows /> : null}
+      <Table containerClassName={list.isLoading ? 'hidden' : undefined} className="min-w-[30rem]">
         <thead>
           <tr>
             <Th>{t('dishes.displayName')}</Th>
@@ -190,7 +203,10 @@ function MainDishes() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setEditing({ id: d.id, name: d.name, type: d.type })}
+                    onClick={() => {
+                      save.reset();
+                      setEditing({ id: d.id, name: d.name, type: d.type });
+                    }}
                   >
                     {t('common.edit')}
                   </Button>
@@ -239,7 +255,7 @@ function Desserts() {
       api.post(`/admin/desserts/${id}/${archived ? 'archive' : 'restore'}`),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['/admin/desserts'] }),
   });
-  const error = save.error ?? archive.error ?? list.error;
+  const error = archive.error ?? list.error;
   const items = list.data?.items ?? [];
 
   return (
@@ -253,39 +269,52 @@ function Desserts() {
           />
           {t('dishes.showArchived')}
         </label>
-        <Button className="ml-auto" onClick={() => setEditing({ id: null, name: '' })}>
+        <Button
+          className="ml-auto"
+          onClick={() => {
+            save.reset();
+            setEditing({ id: null, name: '' });
+          }}
+        >
           {t('dishes.addDessert')}
         </Button>
       </div>
-      {editing ? (
-        <form
-          className="flex flex-wrap items-end gap-3 rounded-md border p-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            save.mutate(editing);
-          }}
-        >
-          <div className="flex min-w-60 flex-1 flex-col gap-2">
-            <Label htmlFor="dessert-name">{t('common.name')}</Label>
-            <Input
-              id="dessert-name"
-              required
-              autoFocus
-              maxLength={120}
-              value={editing.name}
-              onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+      <Dialog
+        open={editing !== null}
+        onClose={() => setEditing(null)}
+        title={editing?.id ? t('dishes.editDessert') : t('dishes.addDessert')}
+      >
+        {editing ? (
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              save.mutate(editing);
+            }}
+          >
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="dessert-name">{t('common.name')}</Label>
+              <Input
+                id="dessert-name"
+                required
+                data-autofocus
+                maxLength={120}
+                value={editing.name}
+                onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+              />
+            </div>
+            {save.error ? <Alert variant="error">{apiErrorText(save.error)}</Alert> : null}
+            <DialogActions
+              pending={save.isPending}
+              disabled={!editing.name.trim()}
+              onCancel={() => setEditing(null)}
             />
-          </div>
-          <Button type="submit" disabled={save.isPending || !editing.name.trim()}>
-            {save.isPending ? t('common.saving') : t('common.save')}
-          </Button>
-          <Button type="button" variant="ghost" onClick={() => setEditing(null)}>
-            {t('common.cancel')}
-          </Button>
-        </form>
-      ) : null}
+          </form>
+        ) : null}
+      </Dialog>
       {error ? <Alert variant="error">{apiErrorText(error)}</Alert> : null}
-      <Table>
+      {list.isLoading ? <LoadingRows /> : null}
+      <Table containerClassName={list.isLoading ? 'hidden' : undefined}>
         <thead>
           <tr>
             <Th>{t('common.name')}</Th>
@@ -304,7 +333,10 @@ function Desserts() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setEditing({ id: d.id, name: d.name })}
+                    onClick={() => {
+                      save.reset();
+                      setEditing({ id: d.id, name: d.name });
+                    }}
                   >
                     {t('common.edit')}
                   </Button>
@@ -328,6 +360,27 @@ function Desserts() {
           ) : null}
         </tbody>
       </Table>
+    </div>
+  );
+}
+
+function DialogActions({
+  pending,
+  disabled,
+  onCancel,
+}: {
+  pending: boolean;
+  disabled: boolean;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
+      <Button type="button" variant="outline" onClick={onCancel}>
+        {t('common.cancel')}
+      </Button>
+      <Button type="submit" disabled={pending || disabled}>
+        {pending ? t('common.saving') : t('common.save')}
+      </Button>
     </div>
   );
 }

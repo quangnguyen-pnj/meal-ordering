@@ -16,6 +16,7 @@ describe('banners', () => {
       severity: 'warning',
       message:
         'Thực đơn tuần bắt đầu 01/03/2027 của Nhà ăn Gò Vấp chưa được công bố. Nhân viên chưa thể đăng ký.',
+      action: { href: '/admin/menu', label: 'Mở Thực đơn tuần' },
     });
   });
 
@@ -33,6 +34,26 @@ describe('banners', () => {
     expect(b!.dismissId).toBe('n1');
     expect(b!.message).toBe(
       'Thực đơn ngày 01/03/2027: món Mặn Cá kho tộ được đổi thành Mặn Sườn ram. Suất bạn đã đăng ký đã chuyển sang món mới.',
+    );
+  });
+
+  it('BR-14: a removed-dish notice names the lock time from the payload, never a fixed hour', () => {
+    const notice = (params: Record<string, string>) =>
+      toBanners([
+        {
+          id: 'notification:n2',
+          severity: 'info',
+          kind: 'NOTIFICATION',
+          notificationId: 'n2',
+          notificationType: 'MENU_DISH_REMOVED',
+          params,
+        },
+      ])[0]!.message;
+    expect(notice({ date: '2027-03-01', dish: 'Mặn Cá kho tộ', lockTime: '07:30' })).toBe(
+      'Thực đơn ngày 01/03/2027: món Mặn Cá kho tộ đã bị bỏ. Vui lòng chọn lại món trước 07:30 ngày đó.',
+    );
+    expect(notice({ date: '2027-03-01', dish: 'Mặn Cá kho tộ' })).toContain(
+      'trước giờ khóa ngày đó',
     );
   });
 });

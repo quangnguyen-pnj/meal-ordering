@@ -7,8 +7,10 @@ import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { LoadingRows } from '@/components/ui/skeleton';
 import { Table, Td, Th } from '@/components/ui/table';
 import { Tabs } from '@/components/ui/tabs';
 import { api } from '@/lib/api';
@@ -20,6 +22,16 @@ const TAB_LABEL: Record<Kind, string> = {
   canteens: vi.master.tabs.canteens,
   floors: vi.master.tabs.floors,
   'cost-centers': vi.master.tabs.costCenters,
+};
+const ADD_LABEL: Record<Kind, string> = {
+  canteens: vi.master.add.canteens,
+  floors: vi.master.add.floors,
+  'cost-centers': vi.master.add.costCenters,
+};
+const EDIT_LABEL: Record<Kind, string> = {
+  canteens: vi.master.edit.canteens,
+  floors: vi.master.edit.floors,
+  'cost-centers': vi.master.edit.costCenters,
 };
 
 /** /admin/master (BR-62): canteens, floors, cost centers; add, edit, deactivate. */
@@ -84,68 +96,86 @@ function MasterTable({ kind }: { kind: Kind }) {
     mutationFn: (item: MasterItemView) => api.patch(`${path}/${item.id}`, { active: !item.active }),
     onSuccess: refresh,
   });
-  const error = save.error ?? toggle.error ?? list.error;
+  const error = toggle.error ?? list.error;
+  const open = (d: Draft) => {
+    save.reset();
+    setDraft(d);
+  };
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
-        <Button onClick={() => setDraft({ id: null, code: '', name: '', sortOrder: 0 })}>
-          {t('master.addTitle')}
+        <Button onClick={() => open({ id: null, code: '', name: '', sortOrder: 0 })}>
+          {ADD_LABEL[kind]}
         </Button>
       </div>
-      {draft ? (
-        <form
-          className="flex flex-wrap items-end gap-3 rounded-md border p-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            save.mutate(draft);
-          }}
-        >
-          <div className="flex w-40 flex-col gap-2">
-            <Label htmlFor="master-code">{t('common.code')}</Label>
-            <Input
-              id="master-code"
-              required
-              disabled={draft.id !== null}
-              maxLength={32}
-              title={t('master.codeHint')}
-              value={draft.code}
-              onChange={(e) => setDraft({ ...draft, code: e.target.value })}
-            />
-          </div>
-          <div className="flex min-w-60 flex-1 flex-col gap-2">
-            <Label htmlFor="master-name">{t('common.name')}</Label>
-            <Input
-              id="master-name"
-              required
-              maxLength={120}
-              value={draft.name}
-              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-            />
-          </div>
-          {isFloor ? (
-            <div className="flex w-28 flex-col gap-2">
-              <Label htmlFor="master-order">{t('master.sortOrder')}</Label>
+      <Dialog
+        open={draft !== null}
+        onClose={() => setDraft(null)}
+        title={draft?.id ? EDIT_LABEL[kind] : ADD_LABEL[kind]}
+      >
+        {draft ? (
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              save.mutate(draft);
+            }}
+          >
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="master-code">{t('common.code')}</Label>
               <Input
-                id="master-order"
-                type="number"
-                min={0}
-                value={draft.sortOrder}
-                onChange={(e) => setDraft({ ...draft, sortOrder: Number(e.target.value) })}
+                id="master-code"
+                required
+                data-autofocus={draft.id === null ? true : undefined}
+                disabled={draft.id !== null}
+                maxLength={32}
+                aria-describedby="master-code-hint"
+                value={draft.code}
+                onChange={(e) => setDraft({ ...draft, code: e.target.value })}
+              />
+              <p id="master-code-hint" className="text-xs text-muted-foreground">
+                {t('master.codeHint')}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="master-name">{t('common.name')}</Label>
+              <Input
+                id="master-name"
+                required
+                data-autofocus={draft.id !== null ? true : undefined}
+                maxLength={120}
+                value={draft.name}
+                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
               />
             </div>
-          ) : null}
-          <Button type="submit" disabled={save.isPending}>
-            {save.isPending ? t('common.saving') : t('common.save')}
-          </Button>
-          <Button type="button" variant="ghost" onClick={() => setDraft(null)}>
-            {t('common.cancel')}
-          </Button>
-          <p className="basis-full text-xs text-muted-foreground">{t('master.codeHint')}</p>
-        </form>
-      ) : null}
+            {isFloor ? (
+              <div className="flex w-28 flex-col gap-2">
+                <Label htmlFor="master-order">{t('master.sortOrder')}</Label>
+                <Input
+                  id="master-order"
+                  type="number"
+                  min={0}
+                  value={draft.sortOrder}
+                  onChange={(e) => setDraft({ ...draft, sortOrder: Number(e.target.value) })}
+                />
+              </div>
+            ) : null}
+            {save.error ? <Alert variant="error">{apiErrorText(save.error)}</Alert> : null}
+            <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
+              <Button type="button" variant="outline" onClick={() => setDraft(null)}>
+                {t('common.cancel')}
+              </Button>
+              <Button type="submit" disabled={save.isPending}>
+                {save.isPending ? t('common.saving') : t('common.save')}
+              </Button>
+            </div>
+          </form>
+        ) : null}
+      </Dialog>
       {error ? <Alert variant="error">{apiErrorText(error)}</Alert> : null}
-      <Table>
+      {list.isLoading ? <LoadingRows rows={3} /> : null}
+      <Table containerClassName={list.isLoading ? 'hidden' : undefined} className="min-w-[36rem]">
         <thead>
           <tr>
             <Th>{t('common.code')}</Th>
@@ -153,7 +183,7 @@ function MasterTable({ kind }: { kind: Kind }) {
             {isFloor ? <Th>{t('master.sortOrder')}</Th> : null}
             {kind === 'cost-centers' ? <Th>{t('master.source')}</Th> : null}
             <Th>{t('master.usage')}</Th>
-            <Th />
+            <Th>{t('common.status')}</Th>
             <Th className="text-right">{t('common.actions')}</Th>
           </tr>
         </thead>
@@ -178,7 +208,7 @@ function MasterTable({ kind }: { kind: Kind }) {
                     variant="ghost"
                     size="sm"
                     onClick={() =>
-                      setDraft({
+                      open({
                         id: item.id,
                         code: item.code,
                         name: item.name,
@@ -195,6 +225,13 @@ function MasterTable({ kind }: { kind: Kind }) {
               </Td>
             </tr>
           ))}
+          {list.data && list.data.items.length === 0 ? (
+            <tr>
+              <Td colSpan={7} className="text-muted-foreground">
+                {t('master.empty')}
+              </Td>
+            </tr>
+          ) : null}
         </tbody>
       </Table>
     </div>

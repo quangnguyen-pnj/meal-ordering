@@ -12,26 +12,27 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core';
 import {
-  addDays,
   checkMenuMix,
   isoWeekdayOf,
-  mondayOf,
   type DessertView,
   type DishView,
   type MenuSaveResult,
   type MenuWeekView,
 } from '@meal/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, GripVertical, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, GripVertical, Plus, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useStore } from 'zustand';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, useConfirm } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
+import { LoadingRows } from '@/components/ui/skeleton';
+import { WeekNav } from '@/components/week-nav';
 import { api } from '@/lib/api';
 import { apiErrorText } from '@/lib/errors';
 import {
@@ -62,7 +63,7 @@ export function MenuScreen() {
   }, [canteens.data, canteenId, weekStart]);
 
   if (canteens.error) return <Alert variant="error">{apiErrorText(canteens.error)}</Alert>;
-  if (!canteens.data) return <p className="text-muted-foreground">{t('common.loading')}</p>;
+  if (!canteens.data) return <LoadingRows rows={6} />;
   if (canteens.data.items.length === 0) return <Alert>{t('menu.noCanteen')}</Alert>;
 
   return (
@@ -70,7 +71,7 @@ export function MenuScreen() {
       <CardHeader className="gap-4">
         <CardTitle>{t('menu.title')}</CardTitle>
         <div className="flex flex-wrap items-end gap-3">
-          <div className="flex w-60 flex-col gap-2">
+          <div className="flex w-full flex-col gap-2 sm:w-60">
             <Label htmlFor="menu-canteen">{t('menu.canteen')}</Label>
             <Select
               id="menu-canteen"
@@ -85,32 +86,14 @@ export function MenuScreen() {
             </Select>
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="menu-week">{t('menu.week')}</Label>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label={t('menu.previousWeek')}
-                onClick={() => weekStart && setWeekStart(addDays(weekStart, -7))}
-              >
-                ‹
-              </Button>
-              <Input
-                id="menu-week"
-                type="date"
-                className="w-44"
-                value={weekStart ?? ''}
-                onChange={(e) => e.target.value && setWeekStart(mondayOf(e.target.value))}
+            <p className="text-sm font-medium leading-none">{t('menu.week')}</p>
+            {weekStart ? (
+              <WeekNav
+                weekStart={weekStart}
+                onChange={setWeekStart}
+                homeWeekStart={canteens.data.upcomingWeekStart}
               />
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label={t('menu.nextWeek')}
-                onClick={() => weekStart && setWeekStart(addDays(weekStart, 7))}
-              >
-                ›
-              </Button>
-            </div>
+            ) : null}
           </div>
         </div>
       </CardHeader>
@@ -132,7 +115,8 @@ function WeekEditor({ canteenId, weekStart }: { canteenId: string; weekStart: st
   const [store] = useState<MenuBuilderStore>(() => createMenuBuilderStore());
   const days = useStore(store, (s) => s.days);
   const dirty = useStore(store, (s) => s.dirty);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [pickerDate, setPickerDate] = useState<string | null>(null);
+  const [confirm, confirmElement] = useConfirm();
   const [reason, setReason] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -222,8 +206,25 @@ function WeekEditor({ canteenId, weekStart }: { canteenId: string; weekStart: st
     useSensor(KeyboardSensor),
   );
 
+  async function askPublish() {
+    if (!view) return;
+    const ok = await confirm({
+      title: t('menu.publishTitle'),
+      description: (
+        <>
+          <span className="block">{t('menu.publishConfirm')}</span>
+          <strong className="mt-2 block text-foreground">
+            {t('menu.closeAt', { time: formatCloseAt(view.closeAt) })}
+          </strong>
+        </>
+      ),
+      confirmLabel: t('menu.publish'),
+    });
+    if (ok) publish.mutate();
+  }
+
   if (week.error) return <Alert variant="error">{apiErrorText(week.error)}</Alert>;
-  if (!view) return <p className="text-muted-foreground">{t('common.loading')}</p>;
+  if (!view) return <LoadingRows rows={6} />;
 
   const error = save.error ?? publish.error;
   const statusVariant = published ? 'success' : view.status === 'DRAFT' ? 'warning' : 'outline';
@@ -243,14 +244,8 @@ function WeekEditor({ canteenId, weekStart }: { canteenId: string; weekStart: st
         {published ? <Alert>{t('menu.publishedEditHint')}</Alert> : null}
 
         <div className="grid gap-4 lg:grid-cols-[18rem_1fr]">
-          <Library
-            dishes={dishes.data?.items ?? []}
-            desserts={desserts.data?.items ?? []}
-            selectedDate={selectedDate && !locked.has(selectedDate) ? selectedDate : null}
-            onAddDish={(id) => selectedDate && store.getState().addDish(selectedDate, id)}
-            onAddDessert={(id) => selectedDate && store.getState().addDessert(selectedDate, id)}
-          />
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <Library dishes={dishes.data?.items ?? []} desserts={desserts.data?.items ?? []} />
+          <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
             {days.map((day) => (
               <DayColumn
                 key={day.date}
@@ -259,8 +254,7 @@ function WeekEditor({ canteenId, weekStart }: { canteenId: string; weekStart: st
                 published={published}
                 wasServing={view.days.find((d) => d.date === day.date)?.isServing ?? false}
                 locked={locked.has(day.date)}
-                selected={selectedDate === day.date}
-                onSelect={() => setSelectedDate(day.date)}
+                onAdd={() => setPickerDate(day.date)}
                 dishById={dishById}
                 dessertName={dessertName}
                 replacementOptions={dishes.data?.items ?? []}
@@ -268,6 +262,23 @@ function WeekEditor({ canteenId, weekStart }: { canteenId: string; weekStart: st
             ))}
           </div>
         </div>
+
+        <DishPicker
+          date={pickerDate}
+          day={days.find((d) => d.date === pickerDate)}
+          dishes={dishes.data?.items ?? []}
+          desserts={desserts.data?.items ?? []}
+          onClose={() => setPickerDate(null)}
+          onAddDish={(id) => {
+            if (pickerDate) store.getState().addDish(pickerDate, id);
+            setNotice(null);
+          }}
+          onAddDessert={(id) => {
+            if (pickerDate) store.getState().addDessert(pickerDate, id);
+            setNotice(null);
+          }}
+        />
+        {confirmElement}
 
         {error ? <Alert variant="error">{apiErrorText(error)}</Alert> : null}
         {notice ? <Alert role="status">{notice}</Alert> : null}
@@ -300,10 +311,16 @@ function WeekEditor({ canteenId, weekStart }: { canteenId: string; weekStart: st
           {!published ? (
             <Button
               disabled={publish.isPending || dirty || view.id === null}
-              onClick={() => window.confirm(t('menu.publishConfirm')) && publish.mutate()}
+              aria-describedby={dirty || view.id === null ? 'publish-hint' : undefined}
+              onClick={askPublish}
             >
               {publish.isPending ? t('menu.publishing') : t('menu.publish')}
             </Button>
+          ) : null}
+          {!published && (dirty || view.id === null) ? (
+            <p id="publish-hint" className="basis-full text-sm text-muted-foreground">
+              {t('menu.publishNeedsSave')}
+            </p>
           ) : null}
         </div>
       </div>
@@ -311,29 +328,16 @@ function WeekEditor({ canteenId, weekStart }: { canteenId: string; weekStart: st
   );
 }
 
-function Library({
-  dishes,
-  desserts,
-  selectedDate,
-  onAddDish,
-  onAddDessert,
-}: {
-  dishes: DishView[];
-  desserts: DessertView[];
-  selectedDate: string | null;
-  onAddDish: (id: string) => void;
-  onAddDessert: (id: string) => void;
-}) {
+/** Desktop drag source; phones and keyboards use the per-day "Thêm món" picker instead. */
+function Library({ dishes, desserts }: { dishes: DishView[]; desserts: DessertView[] }) {
   const [q, setQ] = useState('');
   const match = (name: string) => name.toLowerCase().includes(q.trim().toLowerCase());
-  const target = selectedDate
-    ? `${vi.weekdays[isoWeekdayOf(selectedDate) as keyof typeof vi.weekdays]}`
-    : null;
   return (
-    <aside className="flex flex-col gap-3 rounded-md border p-3 lg:sticky lg:top-4 lg:max-h-[80vh] lg:overflow-y-auto">
+    <aside className="hidden flex-col gap-3 rounded-md border p-3 lg:sticky lg:top-4 lg:flex lg:max-h-[80vh] lg:self-start lg:overflow-y-auto">
       <p className="font-medium">{t('menu.library')}</p>
       <p className="text-xs text-muted-foreground">{t('menu.libraryHint')}</p>
       <Input
+        type="search"
         aria-label={t('common.search')}
         placeholder={t('common.search')}
         value={q}
@@ -346,13 +350,7 @@ function Library({
         {dishes
           .filter((d) => match(d.displayName))
           .map((d) => (
-            <LibraryEntry
-              key={d.id}
-              dragId={`dish:${d.id}`}
-              label={d.displayName}
-              addLabel={target ? `${t('menu.addTo')} ${target}` : null}
-              onAdd={() => onAddDish(d.id)}
-            />
+            <LibraryEntry key={d.id} dragId={`dish:${d.id}`} label={d.displayName} />
           ))}
       </ul>
       <p className="text-xs font-semibold uppercase text-muted-foreground">{t('menu.desserts')}</p>
@@ -360,56 +358,131 @@ function Library({
         {desserts
           .filter((d) => match(d.name))
           .map((d) => (
-            <LibraryEntry
-              key={d.id}
-              dragId={`dessert:${d.id}`}
-              label={d.name}
-              addLabel={target ? `${t('menu.addTo')} ${target}` : null}
-              onAdd={() => onAddDessert(d.id)}
-            />
+            <LibraryEntry key={d.id} dragId={`dessert:${d.id}`} label={d.name} />
           ))}
       </ul>
+      {dishes.length === 0 && desserts.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{t('menu.libraryEmpty')}</p>
+      ) : null}
     </aside>
   );
 }
 
-function LibraryEntry({
-  dragId,
-  label,
-  addLabel,
-  onAdd,
-}: {
-  dragId: string;
-  label: string;
-  addLabel: string | null;
-  onAdd: () => void;
-}) {
+function LibraryEntry({ dragId, label }: { dragId: string; label: string }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: dragId });
   return (
     <li
       ref={setNodeRef}
       style={transform ? { transform: `translate(${transform.x}px, ${transform.y}px)` } : undefined}
       className={cn(
-        'flex items-center gap-2 rounded-md border bg-card px-2 py-1 text-sm',
+        'flex cursor-grab touch-none items-center gap-2 rounded-md border bg-card px-2 py-2 text-sm',
         isDragging && 'z-10 shadow-lg',
       )}
+      {...attributes}
+      {...listeners}
+      aria-label={label}
     >
+      <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+      <span className="flex-1">{label}</span>
+    </li>
+  );
+}
+
+/** Add dishes and desserts to one day; stays open so several can be added in a row. */
+function DishPicker({
+  date,
+  day,
+  dishes,
+  desserts,
+  onClose,
+  onAddDish,
+  onAddDessert,
+}: {
+  date: string | null;
+  day: DraftDay | undefined;
+  dishes: DishView[];
+  desserts: DessertView[];
+  onClose: () => void;
+  onAddDish: (id: string) => void;
+  onAddDessert: (id: string) => void;
+}) {
+  const [q, setQ] = useState('');
+  const match = (name: string) => name.toLowerCase().includes(q.trim().toLowerCase());
+  const onDay = new Set(day?.items.map((i) => i.dishId));
+  const dessertsOnDay = new Set(day?.dessertIds);
+  const title = date
+    ? t('menu.pickerTitle', {
+        day: `${vi.weekdays[isoWeekdayOf(date) as keyof typeof vi.weekdays]} ${formatDate(date)}`,
+      })
+    : '';
+
+  const entry = (id: string, label: string, added: boolean, onAdd: () => void) => (
+    <li key={id}>
       <button
         type="button"
-        className="cursor-grab touch-none text-muted-foreground"
-        aria-label={label}
-        {...attributes}
-        {...listeners}
+        disabled={added}
+        onClick={onAdd}
+        className="flex min-h-11 w-full items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-accent disabled:text-muted-foreground"
       >
-        <GripVertical className="h-4 w-4" aria-hidden />
+        {added ? (
+          <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+        ) : (
+          <Plus className="h-4 w-4 shrink-0" aria-hidden />
+        )}
+        <span className="flex-1">{label}</span>
+        {added ? <span className="text-xs">{t('menu.added')}</span> : null}
       </button>
-      <span className="flex-1">{label}</span>
-      {addLabel ? (
-        <Button variant="ghost" size="sm" onClick={onAdd} title={addLabel}>
-          {t('common.add')}
-        </Button>
-      ) : null}
     </li>
+  );
+
+  return (
+    <Dialog
+      open={date !== null}
+      onClose={() => {
+        setQ('');
+        onClose();
+      }}
+      title={title}
+      footer={
+        <Button
+          onClick={() => {
+            setQ('');
+            onClose();
+          }}
+        >
+          {t('common.done')}
+        </Button>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <Input
+          type="search"
+          aria-label={t('common.search')}
+          placeholder={t('common.search')}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+        <p className="text-xs font-semibold uppercase text-muted-foreground">
+          {t('menu.mainDishes')}
+        </p>
+        <ul className="flex flex-col">
+          {dishes
+            .filter((d) => match(d.displayName))
+            .map((d) => entry(d.id, d.displayName, onDay.has(d.id), () => onAddDish(d.id)))}
+        </ul>
+        <p className="text-xs font-semibold uppercase text-muted-foreground">
+          {t('menu.desserts')}
+        </p>
+        <ul className="flex flex-col">
+          {desserts
+            .filter((d) => match(d.name))
+            .map((d) => entry(d.id, d.name, dessertsOnDay.has(d.id), () => onAddDessert(d.id)))}
+        </ul>
+        {dishes.length === 0 && desserts.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t('menu.libraryEmpty')}</p>
+        ) : null}
+      </div>
+    </Dialog>
   );
 }
 
@@ -419,8 +492,7 @@ function DayColumn({
   published,
   wasServing,
   locked,
-  selected,
-  onSelect,
+  onAdd,
   dishById,
   dessertName,
   replacementOptions,
@@ -430,8 +502,7 @@ function DayColumn({
   published: boolean;
   wasServing: boolean;
   locked: boolean;
-  selected: boolean;
-  onSelect: () => void;
+  onAdd: () => void;
   dishById: Map<string, Pick<DishView, 'type' | 'displayName'>>;
   dessertName: Map<string, string>;
   replacementOptions: DishView[];
@@ -448,10 +519,8 @@ function DayColumn({
     <section
       ref={setNodeRef}
       aria-label={`${weekday} ${formatDate(day.date)}`}
-      onClick={onSelect}
       className={cn(
-        'flex min-h-48 flex-col gap-2 rounded-md border p-3 transition-colors',
-        selected && 'ring-2 ring-ring',
+        'flex flex-col gap-2 rounded-md border p-3 transition-colors sm:min-h-48',
         isOver && 'bg-accent',
         !day.isServing && 'bg-muted/50',
         locked && 'opacity-70',
@@ -468,10 +537,7 @@ function DayColumn({
           <Button
             variant="ghost"
             size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              actions.setServing(day.date, !day.isServing);
-            }}
+            onClick={() => actions.setServing(day.date, !day.isServing)}
           >
             {day.isServing ? t('menu.disableDay') : t('menu.enableDay')}
           </Button>
@@ -570,7 +636,14 @@ function DayColumn({
               ))}
             </div>
           ) : null}
-          {mix && !mix.usual ? (
+          {!locked ? (
+            <Button variant="outline" size="sm" className="self-start" onClick={onAdd}>
+              <Plus className="h-4 w-4" aria-hidden />
+              {t('menu.addDish')}
+            </Button>
+          ) : null}
+          {/* BR-13: only a day that already has dishes gets the unusual-mix note. */}
+          {mix && !mix.usual && day.items.length > 0 ? (
             <p
               className="rounded-md border border-warning/50 bg-warning/15 px-2 py-1 text-xs"
               role="status"

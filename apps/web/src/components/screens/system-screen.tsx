@@ -2,13 +2,15 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { EmployeePicker, type PickedEmployee } from '@/components/employee-picker';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { useConfirm } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
+import { LoadingRows } from '@/components/ui/skeleton';
 import { Table, Td, Th } from '@/components/ui/table';
 import { api } from '@/lib/api';
 import { apiErrorText } from '@/lib/errors';
@@ -37,7 +39,8 @@ interface SyncRunRow {
 /** /system: HC and system admin roles (system admins only) and the sync log. */
 export function SystemScreen() {
   const qc = useQueryClient();
-  const [code, setCode] = useState('');
+  const [pick, setPick] = useState<PickedEmployee | null>(null);
+  const [confirm, confirmElement] = useConfirm();
   const [role, setRole] = useState<PrivilegedRole>('HC_ADMIN');
   const roles = useQuery({
     queryKey: ['/system/roles'],
@@ -48,9 +51,9 @@ export function SystemScreen() {
     queryFn: () => api.get<{ items: SyncRunRow[] }>('/system/sync-runs'),
   });
   const assign = useMutation({
-    mutationFn: () => api.post('/system/roles', { employeeCode: code.trim(), role }),
+    mutationFn: (employeeCode: string) => api.post('/system/roles', { employeeCode, role }),
     onSuccess: () => {
-      setCode('');
+      setPick(null);
       void qc.invalidateQueries({ queryKey: ['/system/roles'] });
     },
   });
@@ -71,14 +74,14 @@ export function SystemScreen() {
             className="flex flex-wrap items-end gap-3"
             onSubmit={(e) => {
               e.preventDefault();
-              if (code.trim()) assign.mutate();
+              if (pick) assign.mutate(pick.employeeCode);
             }}
           >
-            <div className="flex w-56 flex-col gap-2">
-              <Label htmlFor="role-code">{t('org.employeeCode')}</Label>
-              <Input id="role-code" value={code} onChange={(e) => setCode(e.target.value)} />
+            <div className="flex w-full flex-col gap-2 sm:w-80">
+              <Label htmlFor="role-code">{t('employeePicker.label')}</Label>
+              <EmployeePicker id="role-code" value={pick} onChange={setPick} />
             </div>
-            <div className="flex w-56 flex-col gap-2">
+            <div className="flex w-full flex-col gap-2 sm:w-56">
               <Label htmlFor="role-role">{t('system.role')}</Label>
               <Select
                 id="role-role"
@@ -89,12 +92,17 @@ export function SystemScreen() {
                 <option value="SYS_ADMIN">{vi.roles.SYS_ADMIN}</option>
               </Select>
             </div>
-            <Button type="submit" disabled={!code.trim() || assign.isPending}>
+            <Button type="submit" disabled={!pick || assign.isPending}>
               {t('system.assign')}
             </Button>
           </form>
           {error ? <Alert variant="error">{apiErrorText(error)}</Alert> : null}
-          <Table>
+          {confirmElement}
+          {roles.isLoading ? <LoadingRows rows={2} /> : null}
+          <Table
+            containerClassName={roles.isLoading ? 'hidden' : undefined}
+            className="min-w-[36rem]"
+          >
             <thead>
               <tr>
                 <Th>{t('common.code')}</Th>
@@ -115,11 +123,18 @@ export function SystemScreen() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() =>
-                        window.confirm(
-                          t('system.revokeConfirm', { role: vi.roles[r.role], name: r.name }),
-                        ) && revoke.mutate(r.id)
-                      }
+                      onClick={async () => {
+                        const ok = await confirm({
+                          title: t('system.revokeTitle'),
+                          description: t('system.revokeConfirm', {
+                            role: vi.roles[r.role],
+                            name: r.name,
+                          }),
+                          confirmLabel: t('system.revoke'),
+                          destructive: true,
+                        });
+                        if (ok) revoke.mutate(r.id);
+                      }}
                     >
                       {t('system.revoke')}
                     </Button>
@@ -136,12 +151,16 @@ export function SystemScreen() {
         </CardHeader>
         <CardContent>
           {runs.error ? <Alert variant="error">{apiErrorText(runs.error)}</Alert> : null}
-          <Table>
+          {runs.isLoading ? <LoadingRows rows={3} /> : null}
+          <Table
+            containerClassName={runs.isLoading ? 'hidden' : undefined}
+            className="min-w-[36rem]"
+          >
             <thead>
               <tr>
                 <Th>{t('system.started')}</Th>
                 <Th>{t('dishes.type')}</Th>
-                <Th />
+                <Th>{t('common.status')}</Th>
                 <Th>{t('system.records')}</Th>
                 <Th>{t('system.error')}</Th>
               </tr>
@@ -170,6 +189,13 @@ export function SystemScreen() {
                   </Td>
                 </tr>
               ))}
+              {runs.data && runs.data.items.length === 0 ? (
+                <tr>
+                  <Td colSpan={5} className="text-muted-foreground">
+                    {t('system.noSyncRuns')}
+                  </Td>
+                </tr>
+              ) : null}
             </tbody>
           </Table>
         </CardContent>

@@ -10,13 +10,16 @@ import type {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { EmployeePicker, type PickedEmployee } from '@/components/employee-picker';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useConfirm } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
+import { LoadingRows } from '@/components/ui/skeleton';
 import { Table, Td, Th } from '@/components/ui/table';
 import { Tabs } from '@/components/ui/tabs';
 import { ApiError, api } from '@/lib/api';
@@ -105,10 +108,15 @@ function TreeTab() {
     queryFn: () => api.get<{ items: OrgUnitView[] }>('/admin/org/tree'),
   });
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<ReadonlySet<string> | 'all'>(new Set());
+  // null until the user expands or collapses something: then the first two levels are open.
+  const [expandedState, setExpanded] = useState<ReadonlySet<string> | 'all' | null>(null);
   const [filter, setFilter] = useState('');
 
-  const nodes = tree.data?.items ?? [];
+  const nodes = useMemo(() => tree.data?.items ?? [], [tree.data]);
+  const expanded = useMemo(
+    () => expandedState ?? new Set(nodes.filter((n) => n.level <= 2).map((n) => n.id)),
+    [expandedState, nodes],
+  );
   const byId = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
   const children = useMemo(() => {
     const map = new Map<string | null, OrgUnitView[]>();
@@ -136,8 +144,8 @@ function TreeTab() {
 
   const isOpen = (id: string) => visibleIds !== null || expanded === 'all' || expanded.has(id);
   const toggle = (id: string) =>
-    setExpanded((prev) => {
-      const next = new Set(prev === 'all' ? nodes.map((n) => n.id) : prev);
+    setExpanded(() => {
+      const next = new Set(expanded === 'all' ? nodes.map((n) => n.id) : expanded);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
@@ -201,6 +209,7 @@ function TreeTab() {
   };
 
   if (tree.error) return <Alert variant="error">{apiErrorText(tree.error)}</Alert>;
+  if (tree.isLoading) return <LoadingRows rows={8} />;
   const selected = selectedId ? byId.get(selectedId) : undefined;
 
   return (
@@ -208,7 +217,8 @@ function TreeTab() {
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap gap-2">
           <Input
-            className="max-w-xs"
+            className="w-full sm:max-w-xs"
+            type="search"
             aria-label={t('org.filterTree')}
             placeholder={t('org.filterTree')}
             value={filter}
@@ -225,11 +235,13 @@ function TreeTab() {
           {(children.get(null) ?? []).map((n) => renderNode(n, 0))}
         </ul>
       </div>
-      <div>
+      <div className="lg:sticky lg:top-4 lg:self-start">
         {selected ? (
           <NodeDetail key={selected.id} node={selected} byId={byId} />
         ) : (
-          <p className="text-sm text-muted-foreground">{t('org.selectNode')}</p>
+          <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+            {t('org.selectNode')}
+          </p>
         )}
       </div>
     </div>
@@ -241,7 +253,13 @@ function NodeDetail({ node, byId }: { node: OrgUnitView; byId: Map<string, OrgUn
   const floors = useMaster('floors');
   const canteens = useMaster('canteens');
   const costCenters = useMaster('cost-centers');
-  const [adminCode, setAdminCode] = useState('');
+  const [adminPick, setAdminPick] = useState<PickedEmployee | null>(null);
+  const [confirm, confirmElement] = useConfirm();
+  // The last auto-saved change, so a misclick can be undone (each change is audited).
+  const [lastChange, setLastChange] = useState<{ label: string; revert: OrgUnitUpdate } | null>(
+    null,
+  );
+  const [undone, setUndone] = useState(false);
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: ['/admin/org/tree'] });
     void qc.invalidateQueries({ queryKey: ['/admin/org/unassigned'] });
@@ -249,14 +267,27 @@ function NodeDetail({ node, byId }: { node: OrgUnitView; byId: Map<string, OrgUn
   };
 
   const update = useMutation({
-    mutationFn: (patch: OrgUnitUpdate) => api.patch(`/admin/org/units/${node.id}`, patch),
-    onSuccess: refresh,
+    mutationFn: (v: { patch: OrgUnitUpdate; label: string; revert: OrgUnitUpdate | null }) =>
+      api.patch(`/admin/org/units/${node.id}`, v.patch),
+    onSuccess: (_res, v) => {
+      setLastChange(v.revert ? { label: v.label, revert: v.revert } : null);
+      setUndone(v.revert === null);
+      refresh();
+    },
   });
+  const change = (patch: OrgUnitUpdate, label: string) => {
+    const [key] = Object.keys(patch) as Array<keyof OrgUnitUpdate>;
+    const revert: OrgUnitUpdate =
+      key === 'isMealUnit'
+        ? { isMealUnit: node.isMealUnit }
+        : { [key as 'floorId']: node.own[key as 'floorId'] };
+    update.mutate({ patch, label, revert });
+  };
   const assign = useMutation({
-    mutationFn: () =>
-      api.post(`/admin/org/units/${node.id}/dept-admins`, { employeeCode: adminCode.trim() }),
+    mutationFn: (code: string) =>
+      api.post(`/admin/org/units/${node.id}/dept-admins`, { employeeCode: code }),
     onSuccess: () => {
-      setAdminCode('');
+      setAdminPick(null);
       refresh();
     },
   });
@@ -291,7 +322,7 @@ function NodeDetail({ node, byId }: { node: OrgUnitView; byId: Map<string, OrgUn
           id={`node-${key}`}
           value={node.own[key] ?? ''}
           disabled={update.isPending}
-          onChange={(e) => update.mutate({ [key]: e.target.value || null })}
+          onChange={(e) => change({ [key]: e.target.value || null }, label)}
         >
           <option value="">{inheritLabel}</option>
           {options
@@ -308,6 +339,7 @@ function NodeDetail({ node, byId }: { node: OrgUnitView; byId: Map<string, OrgUn
 
   return (
     <div className="flex flex-col gap-4 rounded-md border p-4">
+      {confirmElement}
       <div>
         <p className="font-medium">{node.name}</p>
         <p className="text-xs text-muted-foreground">
@@ -320,13 +352,32 @@ function NodeDetail({ node, byId }: { node: OrgUnitView; byId: Map<string, OrgUn
           type="checkbox"
           checked={node.isMealUnit}
           disabled={update.isPending}
-          onChange={(e) => update.mutate({ isMealUnit: e.target.checked })}
+          onChange={(e) => change({ isMealUnit: e.target.checked }, t('org.mealUnit'))}
         />
         {t('org.mealUnit')}
         {node.isMealUnit && !node.mealUnitValid ? (
           <Badge variant="error">{t('org.mealUnitInvalid')}</Badge>
         ) : null}
       </label>
+      {lastChange || undone ? (
+        <Alert role="status" className="flex items-center justify-between gap-2 py-2">
+          <span>
+            {undone ? t('org.undone') : t('org.autoSaved', { field: lastChange?.label ?? '' })}
+          </span>
+          {lastChange && !undone ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={update.isPending}
+              onClick={() =>
+                update.mutate({ patch: lastChange.revert, label: lastChange.label, revert: null })
+              }
+            >
+              {t('common.undo')}
+            </Button>
+          ) : null}
+        </Alert>
+      ) : null}
       {field('floorId', 'floor', t('org.floor'), floors.data?.items ?? [])}
       {field('canteenId', 'canteen', t('org.canteen'), canteens.data?.items ?? [])}
       {field('costCenterId', 'costCenter', t('org.costCenter'), costCenters.data?.items ?? [])}
@@ -340,27 +391,45 @@ function NodeDetail({ node, byId }: { node: OrgUnitView; byId: Map<string, OrgUn
                 {a.name}{' '}
                 <span className="font-mono text-xs text-muted-foreground">{a.employeeCode}</span>
               </span>
-              <Button variant="ghost" size="sm" onClick={() => revoke.mutate(a.assignmentId)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: t('org.revokeTitle'),
+                    description: t('org.revokeConfirm', { name: a.name, unit: node.name }),
+                    confirmLabel: t('org.revoke'),
+                    destructive: true,
+                  });
+                  if (ok) revoke.mutate(a.assignmentId);
+                }}
+              >
                 {t('org.revoke')}
               </Button>
             </li>
           ))}
         </ul>
+        {node.deptAdmins.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t('org.noDeptAdmin')}</p>
+        ) : null}
         <form
-          className="flex gap-2"
+          className="flex flex-col gap-2"
           onSubmit={(e) => {
             e.preventDefault();
-            if (adminCode.trim()) assign.mutate();
+            if (adminPick) assign.mutate(adminPick.employeeCode);
           }}
         >
-          <Input
-            aria-label={t('org.employeeCode')}
-            placeholder={t('org.employeeCode')}
-            value={adminCode}
-            onChange={(e) => setAdminCode(e.target.value)}
-          />
-          <Button type="submit" variant="outline" disabled={assign.isPending || !adminCode.trim()}>
-            {t('common.add')}
+          <Label htmlFor={`dept-admin-${node.id}`} className="sr-only">
+            {t('org.addDeptAdmin')}
+          </Label>
+          <EmployeePicker id={`dept-admin-${node.id}`} value={adminPick} onChange={setAdminPick} />
+          <Button
+            type="submit"
+            variant="outline"
+            className="self-start"
+            disabled={assign.isPending || !adminPick}
+          >
+            {t('org.addDeptAdmin')}
           </Button>
         </form>
       </div>
@@ -375,6 +444,7 @@ function EmployeeList({ path, showReason = false }: { path: string; showReason?:
     queryFn: () => api.get<{ items: EmployeeMappingView[] }>(path),
   });
   if (list.error) return <Alert variant="error">{apiErrorText(list.error)}</Alert>;
+  if (list.isLoading) return <LoadingRows rows={6} />;
   const items = list.data?.items ?? [];
   const reason = (e: EmployeeMappingView) =>
     e.mealStatus === 'NO_MEAL_UNIT'
@@ -385,7 +455,7 @@ function EmployeeList({ path, showReason = false }: { path: string; showReason?:
   return (
     <div className="flex flex-col gap-2">
       <p className="text-sm text-muted-foreground">{t('common.total', { count: items.length })}</p>
-      <Table>
+      <Table className="min-w-[40rem]">
         <thead>
           <tr>
             <Th>{t('common.code')}</Th>

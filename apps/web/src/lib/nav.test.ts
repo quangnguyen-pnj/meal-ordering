@@ -69,4 +69,18 @@ describe('role-based navigation (plan section 3 matrix)', () => {
     expect(findNavItem('/admin/menu/draft')?.href).toBe('/admin/menu');
     expect(findNavItem('/nope')).toBeUndefined();
   });
+
+  it('marks only screens that exist as available; the rest show "Sắp có"', () => {
+    const available = NAV_ITEMS.filter((i) => i.available).map((i) => i.href);
+    expect(available).toEqual([
+      '/week',
+      '/admin/dishes',
+      '/admin/menu',
+      '/admin/master',
+      '/admin/org',
+      '/admin/employees',
+      '/admin/settings',
+      '/system',
+    ]);
+  });
 });

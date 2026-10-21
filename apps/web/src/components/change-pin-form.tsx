@@ -8,8 +8,8 @@ import { useForm, type UseFormRegisterReturn } from 'react-hook-form';
 import { z } from 'zod';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PinInput } from '@/components/ui/pin-input';
 import { ApiError, api } from '@/lib/api';
 import { errorMessage, t } from '@/messages';
 
@@ -40,11 +40,8 @@ function Field({
   return (
     <div className="flex flex-col gap-2">
       <Label htmlFor={id}>{label}</Label>
-      <Input
+      <PinInput
         id={id}
-        type="password"
-        inputMode="numeric"
-        maxLength={6}
         autoComplete={id === 'currentPin' ? 'current-password' : 'new-password'}
         aria-invalid={error ? true : undefined}
         {...register}

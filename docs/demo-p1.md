@@ -33,7 +33,7 @@ The same file covers BR-05 (`dayFreeEditDeadline`) and BR-06 (the warning starts
 1. Sign in as `PNJP000003`. The yellow banner says next week's menu is not published (BR-06) whenever it is past Monday 12:00.
 2. **Thư viện món** (`/admin/dishes`): add a few main dishes (one Chay, one Cháo, two or three Mặn) and a dessert. The display name follows BR-12 ("Mặn Cá kho tộ"). Archive one: it leaves the list and the menu library but is kept.
 3. **Thực đơn tuần** (`/admin/menu`): pick the canteen; the coming week is preselected and shows "Nếu công bố bây giờ, hạn đăng ký là đến hết …".
-   - Drag dishes from the library onto a day (or click a day, then "Thêm"). Drag the dessert too.
+   - Drag dishes from the library onto a day, or press "Thêm món" on a day and pick from the list (the only way on a phone). Add the dessert too.
    - A day with an unusual mix shows a yellow note (BR-13); it never blocks.
    - "Bật phục vụ" on Saturday turns it on for this week; "Tắt (nghỉ lễ)" marks a holiday (BR-08).
 4. **Lưu bản nháp**, then **Công bố**. The badge turns "Đã công bố" and the deadline is fixed.
@@ -83,6 +83,17 @@ psql "$DATABASE_URL" -c 'UPDATE "ForecastLine" SET quantity = 9'
 - **Employees** (`/admin/employees`): filter by floor, canteen, cost center or meal status; set a cost-center override (HC and system admins); reset a PIN, which shows the temporary PIN once. A dept admin only sees employees in their units.
 - **Settings** (`/admin/settings`): every plan 6.4 key plus the caterer and unit price. Invalid values are refused, and every change is audited.
 - **403s**: every new admin endpoint is swept with employee and dept-admin sessions (plus system admin where the matrix excludes them) in `menu.e2e-spec.ts`, `org.e2e-spec.ts` and `admin.e2e-spec.ts`.
+
+## UI review changes (after P1)
+
+See `docs/decisions.md`, "P1 UI review". To see them:
+
+- Menu: placeholder screens are greyed out with "Sắp có"; clicking a real screen shows a spinner and a skeleton. On a phone (390 px) the menu opens over the page and holds the account block.
+- `/admin/employees` as `PNJP000003`: "Cấp lại PIN" on any row asks for confirmation, then shows the PIN in a dialog in the middle of the screen. "Đổi TT chi phí" also opens a dialog. On a phone each employee is a card.
+- `/admin/settings`: change "Giờ khóa thay đổi trong ngày" to `0730`; it becomes `07:30`, the row is highlighted and a bar offers "Lưu thay đổi (1)" or "Hủy thay đổi".
+- `/admin/org` → select Phòng IT → change the floor: "Đã lưu: Tầng." with "Hoàn tác". Under "Quản trị bộ phận", type part of a name and pick the person.
+- `/system` as `PNJP000004`: grant a role by searching for the employee; revoking asks for confirmation.
+- `/admin/menu`: "Công bố" stays disabled with "Lưu bản nháp trước khi công bố." until the draft is saved; publishing asks for confirmation and repeats the deadline.
 
 ## Checks run for this phase
 

@@ -7,9 +7,11 @@ import { ChangePinForm } from './change-pin-form';
 import { LoginForm } from './login-form';
 
 const replace = vi.fn();
+let pathname = '/week';
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace, refresh: vi.fn(), back: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
+  usePathname: () => pathname,
 }));
 
 afterEach(() => {
@@ -146,5 +148,37 @@ describe('BannerArea', () => {
     );
     expect(screen.getByRole('status')).toHaveTextContent('Thực đơn chưa được công bố');
     expect(screen.getByRole('alert')).toHaveTextContent('Đồng bộ chấm công thất bại');
+  });
+
+  it('links an unpublished-menu warning to the menu builder, except on that screen', () => {
+    const banner = {
+      id: 'm',
+      severity: 'warning' as const,
+      message: 'Thực đơn chưa được công bố',
+      action: { href: '/admin/menu', label: 'Mở Thực đơn tuần' },
+    };
+    pathname = '/admin/org';
+    const { unmount } = render(<BannerArea banners={[banner]} />);
+    expect(screen.getByRole('link', { name: 'Mở Thực đơn tuần' })).toHaveAttribute(
+      'href',
+      '/admin/menu',
+    );
+    unmount();
+    pathname = '/admin/menu';
+    render(<BannerArea banners={[banner]} />);
+    expect(screen.queryByRole('link', { name: 'Mở Thực đơn tuần' })).toBeNull();
+    pathname = '/week';
+  });
+});
+
+describe('PIN fields', () => {
+  it('can show the typed PIN and hide it again', async () => {
+    wrap(<LoginForm />);
+    const pin = screen.getByLabelText('Mã PIN (6 chữ số)');
+    expect(pin).toHaveAttribute('type', 'password');
+    await userEvent.click(screen.getByRole('button', { name: 'Hiện mã PIN' }));
+    expect(pin).toHaveAttribute('type', 'text');
+    await userEvent.click(screen.getByRole('button', { name: 'Ẩn mã PIN' }));
+    expect(pin).toHaveAttribute('type', 'password');
   });
 });
