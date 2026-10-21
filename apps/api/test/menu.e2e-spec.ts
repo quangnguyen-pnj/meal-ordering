@@ -87,7 +87,7 @@ afterAll(async () => {
 });
 
 describe('BR-10: dish and dessert libraries', () => {
-  it('BR-10: the HC admin adds main dishes with a type and sessions, shown as "[Type] [Name]"', async () => {
+  it('BR-10: the HC admin adds main dishes with a type and sessions, shown as "[Type] Name"', async () => {
     const defs: Array<[string, string, string]> = [
       ['chay', 'Đậu hũ sốt cà', 'CHAY'],
       ['chao', 'Cháo gà', 'CHAO'],
@@ -106,7 +106,7 @@ describe('BR-10: dish and dessert libraries', () => {
     }
     const list = await hc.get('/api/admin/dishes').expect(200);
     expect(list.body.items.find((d: { id: string }) => d.id === dish.ca).displayName).toBe(
-      'Mặn Cá kho tộ',
+      '[Mặn] Cá kho tộ',
     );
     for (const [key, name] of [
       ['chuoi', 'Chuối'],
@@ -193,10 +193,10 @@ describe('building and publishing a week (BR-08, BR-11, BR-13, BR-03)', () => {
     expect(week.days[5]!.isServing).toBe(true); // Saturday turned on for this week
     expect(week.days[0]!.desserts).toEqual([{ id: dessert.chuoi, name: 'Chuối' }]);
     expect(week.days[0]!.items.map((i) => i.displayName)).toEqual([
-      'Chay Đậu hũ sốt cà',
-      'Cháo Cháo gà',
-      'Mặn Cá kho tộ',
-      'Mặn Thịt kho trứng',
+      '[Chay] Đậu hũ sốt cà',
+      '[Cháo] Cháo gà',
+      '[Mặn] Cá kho tộ',
+      '[Mặn] Thịt kho trứng',
     ]);
   });
 
@@ -261,7 +261,7 @@ describe("employees see their canteen's published menu (BR-02, BR-15, BR-63)", (
       '2027-03-05',
       '2027-03-06',
     ]);
-    expect(menu.days[0]!.items.map((i) => i.displayName)).toContain('Mặn Cá kho tộ');
+    expect(menu.days[0]!.items.map((i) => i.displayName)).toContain('[Mặn] Cá kho tộ');
     expect(menu.days[0]!.mix).toBeNull(); // the mix warning is for the HC admin only
   });
 
@@ -369,8 +369,8 @@ describe('BR-14: editing a published menu', () => {
     );
     expect(replaced.params).toMatchObject({
       date: '2027-03-01',
-      from: 'Mặn Cá kho tộ',
-      to: 'Mặn Sườn ram',
+      from: '[Mặn] Cá kho tộ',
+      to: '[Mặn] Sườn ram',
     });
     const removed = notices.find(
       (n: { notificationType: string }) => n.notificationType === 'MENU_DISH_REMOVED',
