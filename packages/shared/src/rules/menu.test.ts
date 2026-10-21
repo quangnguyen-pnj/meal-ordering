@@ -9,10 +9,10 @@ import {
 } from './menu';
 
 describe('BR-12: meal display name', () => {
-  it('BR-12: is "[Type] [Dish name]"', () => {
-    expect(mealDisplayName('MAN', 'Cá kho tộ')).toBe('Mặn Cá kho tộ');
-    expect(mealDisplayName('CHAY', 'Đậu hũ sốt cà')).toBe('Chay Đậu hũ sốt cà');
-    expect(mealDisplayName('CHAO', ' Cháo gà ')).toBe('Cháo Cháo gà');
+  it('BR-12: is the type in brackets, then the dish name', () => {
+    expect(mealDisplayName('CHAY', 'Gạo lứt muối mè')).toBe('[Chay] Gạo lứt muối mè');
+    expect(mealDisplayName('MAN', 'Cá kho tộ')).toBe('[Mặn] Cá kho tộ');
+    expect(mealDisplayName('CHAO', ' Cháo gà ')).toBe('[Cháo] Cháo gà');
   });
 });
 

@@ -31,7 +31,7 @@ The same file covers BR-05 (`dayFreeEditDeadline`) and BR-06 (the warning starts
 ## 2. The HC admin can build and publish a week
 
 1. Sign in as `PNJP000003`. The yellow banner says next week's menu is not published (BR-06) whenever it is past Monday 12:00.
-2. **Thư viện món** (`/admin/dishes`): add a few main dishes (one Chay, one Cháo, two or three Mặn) and a dessert. The display name follows BR-12 ("Mặn Cá kho tộ"). Archive one: it leaves the list and the menu library but is kept.
+2. **Thư viện món** (`/admin/dishes`): add a few main dishes (one Chay, one Cháo, two or three Mặn) and a dessert. The display name follows BR-12: the type in brackets, then the name ("[Chay] Gạo lứt muối mè"). Archive one: it leaves the list and the menu library but is kept.
 3. **Thực đơn tuần** (`/admin/menu`): pick the canteen; the coming week is preselected and shows "Nếu công bố bây giờ, hạn đăng ký là đến hết …".
    - Drag dishes from the library onto a day (or click a day, then "Thêm"). Drag the dessert too.
    - A day with an unusual mix shows a yellow note (BR-13); it never blocks.

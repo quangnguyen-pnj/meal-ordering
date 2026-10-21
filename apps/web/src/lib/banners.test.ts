@@ -27,12 +27,12 @@ describe('banners', () => {
         kind: 'NOTIFICATION',
         notificationId: 'n1',
         notificationType: 'MENU_DISH_REPLACED',
-        params: { date: '2027-03-01', from: 'Mặn Cá kho tộ', to: 'Mặn Sườn ram' },
+        params: { date: '2027-03-01', from: '[Mặn] Cá kho tộ', to: '[Mặn] Sườn ram' },
       },
     ]);
     expect(b!.dismissId).toBe('n1');
     expect(b!.message).toBe(
-      'Thực đơn ngày 01/03/2027: món Mặn Cá kho tộ được đổi thành Mặn Sườn ram. Suất bạn đã đăng ký đã chuyển sang món mới.',
+      'Thực đơn ngày 01/03/2027: món [Mặn] Cá kho tộ được đổi thành [Mặn] Sườn ram. Suất bạn đã đăng ký đã chuyển sang món mới.',
     );
   });
 });
