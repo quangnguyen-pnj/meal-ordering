@@ -24,6 +24,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
@@ -43,7 +44,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useDebounced } from '@/hooks/use-debounced';
 import { api } from '@/lib/api';
 import { apiErrorText } from '@/lib/errors';
-import { formatRange } from '@/lib/utils';
+import { cn, formatRange } from '@/lib/utils';
 import { t, vi } from '@/messages';
 
 const PAGE = 50;
@@ -283,7 +284,10 @@ export function EmployeesScreen({ canManageOrg }: { canManageOrg: boolean }) {
               {items.map((e) => (
                 <li
                   key={e.employeeCode}
-                  className={`rounded-lg bg-card p-4 text-sm shadow-block ${e.status === 'LEFT' ? 'text-muted-foreground' : ''}`}
+                  className={cn(
+                    'rounded-lg bg-card p-4 text-sm shadow-block',
+                    e.status === 'LEFT' && 'text-muted-foreground',
+                  )}
                 >
                   <p className="font-medium">
                     {e.name}{' '}
@@ -492,16 +496,18 @@ function RowActions({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuLabel className="max-w-56 truncate">{e.name}</DropdownMenuLabel>
-        {canManageOrg ? (
-          <DropdownMenuItem onSelect={() => onOverride(trigger.current)}>
-            <Wallet aria-hidden />
-            {t('employees.override')}
+        <DropdownMenuGroup>
+          {canManageOrg ? (
+            <DropdownMenuItem onSelect={() => onOverride(trigger.current)}>
+              <Wallet aria-hidden />
+              {t('employees.override')}
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuItem disabled={resetPending} onSelect={() => onResetPin(trigger.current)}>
+            <KeyRound aria-hidden />
+            {t('employees.resetPin')}
           </DropdownMenuItem>
-        ) : null}
-        <DropdownMenuItem disabled={resetPending} onSelect={() => onResetPin(trigger.current)}>
-          <KeyRound aria-hidden />
-          {t('employees.resetPin')}
-        </DropdownMenuItem>
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );
