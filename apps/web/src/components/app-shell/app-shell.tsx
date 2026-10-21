@@ -1,13 +1,16 @@
 'use client';
 
 import type { SessionUser } from '@meal/shared';
-import { LogOut, Menu, X } from 'lucide-react';
+import { LogOut, Menu } from 'lucide-react';
 import Link, { useLinkStatus } from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { Spinner } from '@/components/ui/skeleton';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import { visibleNav, type NavItem } from '@/lib/nav';
 import { cn } from '@/lib/utils';
@@ -34,16 +37,22 @@ function NavLink({
   if (!item.available) {
     // Placeholder screens stay listed so people know they are coming, but are not links.
     return (
-      <span
-        aria-disabled="true"
-        title={t('nav.comingSoonHint', { phase: item.phase })}
-        className={cn(itemClass, 'cursor-default text-muted-foreground/70')}
-      >
-        {t(item.labelKey)}
-        <Badge variant="outline" className="ml-auto text-[0.65rem] font-normal">
-          {t('nav.comingSoon')}
-        </Badge>
-      </span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            aria-disabled="true"
+            className={cn(itemClass, 'cursor-default text-muted-foreground/70')}
+          >
+            {t(item.labelKey)}
+            <Badge variant="outline" className="ml-auto text-[0.65rem] font-normal">
+              {t('nav.comingSoon')}
+            </Badge>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="right">
+          {t('nav.comingSoonHint', { phase: item.phase })}
+        </TooltipContent>
+      </Tooltip>
     );
   }
   return (
@@ -103,18 +112,34 @@ export function AppShell({
     { key: 'admin', title: t('nav.groups.admin'), items: nav.admin },
   ].filter((g) => g.items.length > 0);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open]);
-
   async function signOut() {
     await api.post('/auth/logout').catch(() => undefined);
     router.replace('/login');
     router.refresh();
   }
+
+  const navigation = (
+    <nav aria-label={t('nav.label')} className="flex flex-col gap-4 px-2 py-4 md:pt-0">
+      {groups.map((group) => (
+        <div key={group.key}>
+          <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {group.title}
+          </p>
+          <ul className="flex flex-col gap-0.5">
+            {group.items.map((item) => (
+              <li key={item.href}>
+                <NavLink
+                  item={item}
+                  active={pathname === item.href || pathname.startsWith(`${item.href}/`)}
+                  onNavigate={() => setOpen(false)}
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </nav>
+  );
 
   return (
     <div className="min-h-screen md:flex">
@@ -124,57 +149,35 @@ export function AppShell({
           variant="ghost"
           size="icon"
           aria-expanded={open}
-          aria-controls="main-nav"
-          aria-label={open ? t('common.closeMenu') : t('common.menu')}
-          onClick={() => setOpen((v) => !v)}
+          aria-controls="mobile-nav"
+          aria-label={t('common.menu')}
+          onClick={() => setOpen(true)}
         >
-          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          <Menu className="h-5 w-5" />
         </Button>
       </header>
 
-      {open ? (
-        <div
-          className="fixed inset-0 top-14 z-20 bg-foreground/30 md:hidden"
-          aria-hidden
-          onClick={() => setOpen(false)}
-        />
-      ) : null}
+      {/* Phones: the menu slides in from the left and also holds the account block. */}
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent id="mobile-nav" side="left" className="gap-0 p-0 md:hidden">
+          <div className="px-4 py-4">
+            <SheetTitle>{t('app.name')}</SheetTitle>
+            <SheetDescription>{t('app.factory')}</SheetDescription>
+          </div>
+          <div className="flex-1 overflow-y-auto">{navigation}</div>
+          <Separator />
+          <div className="flex items-center justify-between gap-3 p-4">
+            <UserBlock user={user} onSignOut={signOut} />
+          </div>
+        </SheetContent>
+      </Sheet>
 
-      <aside
-        id="main-nav"
-        className={cn(
-          'fixed inset-x-0 bottom-0 top-14 z-20 flex-col overflow-y-auto border-b bg-card md:sticky md:top-0 md:flex md:h-screen md:w-64 md:shrink-0 md:border-b-0 md:border-r',
-          open ? 'flex' : 'hidden',
-        )}
-      >
-        <div className="hidden px-4 py-5 md:block">
+      <aside className="hidden border-r bg-card md:sticky md:top-0 md:flex md:h-screen md:w-64 md:shrink-0 md:flex-col md:overflow-y-auto">
+        <div className="px-4 py-5">
           <p className="text-lg font-semibold">{t('app.name')}</p>
           <p className="text-sm text-muted-foreground">{t('app.factory')}</p>
         </div>
-        <nav aria-label={t('nav.label')} className="flex flex-col gap-4 px-2 py-4 md:pt-0">
-          {groups.map((group) => (
-            <div key={group.key}>
-              <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {group.title}
-              </p>
-              <ul className="flex flex-col gap-0.5">
-                {group.items.map((item) => (
-                  <li key={item.href}>
-                    <NavLink
-                      item={item}
-                      active={pathname === item.href || pathname.startsWith(`${item.href}/`)}
-                      onNavigate={() => setOpen(false)}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </nav>
-        {/* On phones the account block lives in the menu so the header stays one row. */}
-        <div className="mt-auto flex items-center justify-between gap-3 border-t p-4 md:hidden">
-          <UserBlock user={user} onSignOut={signOut} />
-        </div>
+        {navigation}
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">

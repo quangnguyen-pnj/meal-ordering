@@ -22,15 +22,25 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp, Check, GripVertical, Plus, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { useStore } from 'zustand';
+import { ResponsiveSelect } from '@/components/responsive-select';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, useConfirm } from '@/components/ui/dialog';
+import { AppDialog } from '@/components/app-dialog';
+import { useConfirm } from '@/components/confirm-dialog';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
 import { LoadingRows } from '@/components/ui/skeleton';
 import { WeekNav } from '@/components/week-nav';
 import { api } from '@/lib/api';
@@ -62,7 +72,7 @@ export function MenuScreen() {
     if (canteens.data && !weekStart) setWeekStart(canteens.data.upcomingWeekStart);
   }, [canteens.data, canteenId, weekStart]);
 
-  if (canteens.error) return <Alert variant="error">{apiErrorText(canteens.error)}</Alert>;
+  if (canteens.error) return <Alert variant="destructive">{apiErrorText(canteens.error)}</Alert>;
   if (!canteens.data) return <LoadingRows rows={6} />;
   if (canteens.data.items.length === 0) return <Alert>{t('menu.noCanteen')}</Alert>;
 
@@ -73,17 +83,12 @@ export function MenuScreen() {
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex w-full flex-col gap-2 sm:w-60">
             <Label htmlFor="menu-canteen">{t('menu.canteen')}</Label>
-            <Select
+            <ResponsiveSelect
               id="menu-canteen"
               value={canteenId ?? ''}
-              onChange={(e) => setCanteenId(e.target.value)}
-            >
-              {canteens.data.items.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </Select>
+              onValueChange={setCanteenId}
+              options={canteens.data.items.map((c) => ({ value: c.id, label: c.name }))}
+            />
           </div>
           <div className="flex flex-col gap-2">
             <p className="text-sm font-medium leading-none">{t('menu.week')}</p>
@@ -118,7 +123,6 @@ function WeekEditor({ canteenId, weekStart }: { canteenId: string; weekStart: st
   const [pickerDate, setPickerDate] = useState<string | null>(null);
   const [confirm, confirmElement] = useConfirm();
   const [reason, setReason] = useState('');
-  const [notice, setNotice] = useState<string | null>(null);
 
   const weekKey = ['menu-week', canteenId, weekStart];
   const week = useQuery({
@@ -170,7 +174,7 @@ function WeekEditor({ canteenId, weekStart }: { canteenId: string; weekStart: st
       qc.setQueryData(weekKey, res.menu);
       store.getState().load(res.menu);
       setReason('');
-      setNotice(
+      toast.success(
         published
           ? t('menu.effects', {
               moved: res.effects.movedRegistrations,
@@ -185,7 +189,7 @@ function WeekEditor({ canteenId, weekStart }: { canteenId: string; weekStart: st
     mutationFn: () => api.post<MenuWeekView>(`/admin/menu/weeks/${view?.id}/publish`),
     onSuccess: (res) => {
       qc.setQueryData(weekKey, res);
-      setNotice(t('menu.published'));
+      toast.success(t('menu.published'));
     },
   });
 
@@ -197,7 +201,6 @@ function WeekEditor({ canteenId, weekStart }: { canteenId: string; weekStart: st
     const [kind, id] = String(event.active.id).split(':') as ['dish' | 'dessert', string];
     if (kind === 'dish') store.getState().addDish(date, id);
     else store.getState().addDessert(date, id);
-    setNotice(null);
   }
 
   const sensors = useSensors(
@@ -223,7 +226,7 @@ function WeekEditor({ canteenId, weekStart }: { canteenId: string; weekStart: st
     if (ok) publish.mutate();
   }
 
-  if (week.error) return <Alert variant="error">{apiErrorText(week.error)}</Alert>;
+  if (week.error) return <Alert variant="destructive">{apiErrorText(week.error)}</Alert>;
   if (!view) return <LoadingRows rows={6} />;
 
   const error = save.error ?? publish.error;
@@ -271,17 +274,14 @@ function WeekEditor({ canteenId, weekStart }: { canteenId: string; weekStart: st
           onClose={() => setPickerDate(null)}
           onAddDish={(id) => {
             if (pickerDate) store.getState().addDish(pickerDate, id);
-            setNotice(null);
           }}
           onAddDessert={(id) => {
             if (pickerDate) store.getState().addDessert(pickerDate, id);
-            setNotice(null);
           }}
         />
         {confirmElement}
 
-        {error ? <Alert variant="error">{apiErrorText(error)}</Alert> : null}
-        {notice ? <Alert role="status">{notice}</Alert> : null}
+        {error ? <Alert variant="destructive">{apiErrorText(error)}</Alert> : null}
         {dirty ? <p className="text-sm text-muted-foreground">{t('menu.unsaved')}</p> : null}
 
         <div className="flex flex-wrap items-end gap-3">
@@ -406,8 +406,6 @@ function DishPicker({
   onAddDish: (id: string) => void;
   onAddDessert: (id: string) => void;
 }) {
-  const [q, setQ] = useState('');
-  const match = (name: string) => name.toLowerCase().includes(q.trim().toLowerCase());
   const onDay = new Set(day?.items.map((i) => i.dishId));
   const dessertsOnDay = new Set(day?.dessertIds);
   const title = date
@@ -416,73 +414,42 @@ function DishPicker({
       })
     : '';
 
+  // cmdk filters on `value`; ids keep two dishes with the same name apart.
   const entry = (id: string, label: string, added: boolean, onAdd: () => void) => (
-    <li key={id}>
-      <button
-        type="button"
-        disabled={added}
-        onClick={onAdd}
-        className="flex min-h-11 w-full items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-accent disabled:text-muted-foreground"
-      >
-        {added ? (
-          <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden />
-        ) : (
-          <Plus className="h-4 w-4 shrink-0" aria-hidden />
-        )}
-        <span className="flex-1">{label}</span>
-        {added ? <span className="text-xs">{t('menu.added')}</span> : null}
-      </button>
-    </li>
+    <CommandItem key={id} value={`${label} ${id}`} disabled={added} onSelect={onAdd}>
+      {added ? <Check className="text-primary" aria-hidden /> : <Plus aria-hidden />}
+      <span className="flex-1">{label}</span>
+      {added ? <span className="text-xs">{t('menu.added')}</span> : null}
+    </CommandItem>
   );
 
   return (
-    <Dialog
+    <AppDialog
       open={date !== null}
-      onClose={() => {
-        setQ('');
-        onClose();
-      }}
+      onClose={onClose}
       title={title}
-      footer={
-        <Button
-          onClick={() => {
-            setQ('');
-            onClose();
-          }}
-        >
-          {t('common.done')}
-        </Button>
-      }
+      className="gap-3"
+      footer={<Button onClick={onClose}>{t('common.done')}</Button>}
     >
-      <div className="flex flex-col gap-3">
-        <Input
-          type="search"
-          aria-label={t('common.search')}
-          placeholder={t('common.search')}
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
-        <p className="text-xs font-semibold uppercase text-muted-foreground">
-          {t('menu.mainDishes')}
-        </p>
-        <ul className="flex flex-col">
-          {dishes
-            .filter((d) => match(d.displayName))
-            .map((d) => entry(d.id, d.displayName, onDay.has(d.id), () => onAddDish(d.id)))}
-        </ul>
-        <p className="text-xs font-semibold uppercase text-muted-foreground">
-          {t('menu.desserts')}
-        </p>
-        <ul className="flex flex-col">
-          {desserts
-            .filter((d) => match(d.name))
-            .map((d) => entry(d.id, d.name, dessertsOnDay.has(d.id), () => onAddDessert(d.id)))}
-        </ul>
-        {dishes.length === 0 && desserts.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t('menu.libraryEmpty')}</p>
-        ) : null}
-      </div>
-    </Dialog>
+      <Command className="rounded-md border">
+        <CommandInput placeholder={t('menu.searchDish')} />
+        <CommandList className="max-h-[50vh]">
+          <CommandEmpty>
+            {dishes.length === 0 && desserts.length === 0
+              ? t('menu.libraryEmpty')
+              : t('menu.noDishFound')}
+          </CommandEmpty>
+          <CommandGroup heading={t('menu.mainDishes')}>
+            {dishes.map((d) => entry(d.id, d.displayName, onDay.has(d.id), () => onAddDish(d.id)))}
+          </CommandGroup>
+          <CommandGroup heading={t('menu.desserts')}>
+            {desserts.map((d) =>
+              entry(d.id, d.name, dessertsOnDay.has(d.id), () => onAddDessert(d.id)),
+            )}
+          </CommandGroup>
+        </CommandList>
+      </Command>
+    </AppDialog>
   );
 }
 
@@ -591,23 +558,24 @@ function DayColumn({
                     ) : null}
                   </div>
                   {published && item.id && !locked ? (
-                    <Select
+                    <ResponsiveSelect
                       aria-label={`${t('menu.replaceWith')}: ${dish?.displayName ?? ''}`}
                       className="h-9 text-sm"
                       value={item.dishId}
-                      onChange={(e) => actions.replaceItem(day.date, index, e.target.value)}
-                    >
-                      {!replacementOptions.some((o) => o.id === item.dishId) ? (
-                        <option value={item.dishId}>{dish?.displayName}</option>
-                      ) : null}
-                      {replacementOptions.map((o) => (
-                        <option key={o.id} value={o.id}>
-                          {o.id === item.dishId
-                            ? o.displayName
-                            : `${t('menu.replaceWith')}: ${o.displayName}`}
-                        </option>
-                      ))}
-                    </Select>
+                      onValueChange={(v) => actions.replaceItem(day.date, index, v)}
+                      options={[
+                        ...(!replacementOptions.some((o) => o.id === item.dishId)
+                          ? [{ value: item.dishId, label: dish?.displayName ?? item.dishId }]
+                          : []),
+                        ...replacementOptions.map((o) => ({
+                          value: o.id,
+                          label:
+                            o.id === item.dishId
+                              ? o.displayName
+                              : `${t('menu.replaceWith')}: ${o.displayName}`,
+                        })),
+                      ]}
+                    />
                   ) : null}
                 </li>
               );
@@ -624,13 +592,15 @@ function DayColumn({
                 <Badge key={id} variant="outline" className="gap-1">
                   {dessertName.get(id) ?? id}
                   {!locked ? (
-                    <button
-                      type="button"
-                      aria-label={t('common.remove')}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="-my-1 -mr-1.5 h-6 w-6"
+                      aria-label={`${t('common.remove')} ${dessertName.get(id) ?? ''}`}
                       onClick={() => actions.removeDessert(day.date, id)}
                     >
                       <X className="h-3 w-3" aria-hidden />
-                    </button>
+                    </Button>
                   ) : null}
                 </Badge>
               ))}

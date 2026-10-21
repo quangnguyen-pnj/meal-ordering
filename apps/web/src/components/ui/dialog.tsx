@@ -1,184 +1,101 @@
 'use client';
 
+import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import * as React from 'react';
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { t } from '@/messages';
 
-const FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const Dialog = DialogPrimitive.Root;
+const DialogTrigger = DialogPrimitive.Trigger;
+const DialogPortal = DialogPrimitive.Portal;
+const DialogClose = DialogPrimitive.Close;
 
-/**
- * Modal dialog: traps Tab, closes on Escape or a backdrop click, and gives focus back to the
- * element that opened it. Rendered only while open, so the caller keeps form state simple.
- */
-export function Dialog({
-  open,
-  onClose,
-  title,
-  description,
-  children,
-  footer,
-  className,
-  dismissible = true,
-}: {
-  open: boolean;
-  onClose: () => void;
-  title: string;
-  description?: React.ReactNode;
-  children?: React.ReactNode;
-  footer?: React.ReactNode;
-  className?: string;
-  /** False for dialogs that must be acknowledged with a button (a one-time PIN). */
-  dismissible?: boolean;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const titleId = useId();
-  const descriptionId = useId();
+const DialogOverlay = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Overlay>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
+>(({ className, ...props }, ref) => (
+  <DialogPrimitive.Overlay
+    ref={ref}
+    className={cn(
+      'fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+      className,
+    )}
+    {...props}
+  />
+));
+DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
-  useEffect(() => {
-    if (!open) return;
-    const opener = document.activeElement as HTMLElement | null;
-    const node = ref.current;
-    const first =
-      node?.querySelector<HTMLElement>('[autofocus], [data-autofocus]') ??
-      node?.querySelector<HTMLElement>(FOCUSABLE);
-    (first ?? node)?.focus();
-    const { overflow } = document.body.style;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = overflow;
-      opener?.focus?.();
-    };
-  }, [open]);
+const DialogContent = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
+>(({ className, children, ...props }, ref) => (
+  <DialogPortal>
+    <DialogOverlay />
+    <DialogPrimitive.Content
+      ref={ref}
+      className={cn(
+        'fixed left-[50%] top-[50%] z-50 flex max-h-[90vh] w-[calc(100%-2rem)] max-w-lg translate-x-[-50%] translate-y-[-50%] flex-col gap-4 overflow-y-auto rounded-lg border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
+        className,
+      )}
+      {...props}
+    >
+      {children}
+      <DialogPrimitive.Close className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring disabled:pointer-events-none">
+        <X className="h-4 w-4" />
+        <span className="sr-only">{t('common.close')}</span>
+      </DialogPrimitive.Close>
+    </DialogPrimitive.Content>
+  </DialogPortal>
+));
+DialogContent.displayName = DialogPrimitive.Content.displayName;
 
-  if (!open) return null;
+const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+  <div className={cn('flex flex-col gap-1.5 pr-6 text-left', className)} {...props} />
+);
+DialogHeader.displayName = 'DialogHeader';
 
-  function onKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Escape' && dismissible) {
-      e.stopPropagation();
-      onClose();
-      return;
-    }
-    if (e.key !== 'Tab' || !ref.current) return;
-    const items = [...ref.current.querySelectorAll<HTMLElement>(FOCUSABLE)];
-    if (items.length === 0) return;
-    const first = items[0]!;
-    const last = items[items.length - 1]!;
-    if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault();
-      first.focus();
-    }
-  }
+const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+  <div
+    className={cn('flex flex-col-reverse gap-2 sm:flex-row sm:justify-end', className)}
+    {...props}
+  />
+);
+DialogFooter.displayName = 'DialogFooter';
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
-      <div
-        className="absolute inset-0 bg-foreground/40"
-        aria-hidden
-        onClick={dismissible ? onClose : undefined}
-      />
-      <div
-        ref={ref}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={description ? descriptionId : undefined}
-        tabIndex={-1}
-        onKeyDown={onKeyDown}
-        className={cn(
-          'relative flex max-h-[90vh] w-full flex-col rounded-t-lg border bg-card shadow-lg focus:outline-none sm:max-w-lg sm:rounded-lg',
-          className,
-        )}
-      >
-        <div className="flex items-start justify-between gap-3 p-5 pb-3">
-          <div className="flex flex-col gap-1">
-            <h2 id={titleId} className="text-lg font-semibold leading-tight">
-              {title}
-            </h2>
-            {description ? (
-              <div id={descriptionId} className="text-sm text-muted-foreground">
-                {description}
-              </div>
-            ) : null}
-          </div>
-          {dismissible ? (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="-mr-2 -mt-2 shrink-0"
-              aria-label={t('common.close')}
-              onClick={onClose}
-            >
-              <X className="h-5 w-5" aria-hidden />
-            </Button>
-          ) : null}
-        </div>
-        {children ? <div className="overflow-y-auto px-5 pb-3 pt-1">{children}</div> : null}
-        {footer ? (
-          <div className="flex flex-col-reverse gap-2 border-t p-4 sm:flex-row sm:justify-end">
-            {footer}
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
+const DialogTitle = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Title>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
+>(({ className, ...props }, ref) => (
+  <DialogPrimitive.Title
+    ref={ref}
+    className={cn('text-lg font-semibold leading-tight', className)}
+    {...props}
+  />
+));
+DialogTitle.displayName = DialogPrimitive.Title.displayName;
 
-export interface ConfirmOptions {
-  title: string;
-  description?: React.ReactNode;
-  confirmLabel?: string;
-  cancelLabel?: string;
-  destructive?: boolean;
-}
+const DialogDescription = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Description>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>
+>(({ className, ...props }, ref) => (
+  <DialogPrimitive.Description
+    ref={ref}
+    className={cn('text-sm text-muted-foreground', className)}
+    {...props}
+  />
+));
+DialogDescription.displayName = DialogPrimitive.Description.displayName;
 
-/**
- * Promise-based replacement for window.confirm: `if (await confirm({...})) mutate()`.
- * Render the returned element once in the screen.
- */
-export function useConfirm(): [(options: ConfirmOptions) => Promise<boolean>, React.ReactNode] {
-  const [pending, setPending] = useState<{
-    options: ConfirmOptions;
-    resolve: (ok: boolean) => void;
-  } | null>(null);
-
-  const confirm = useCallback(
-    (options: ConfirmOptions) =>
-      new Promise<boolean>((resolve) => setPending({ options, resolve })),
-    [],
-  );
-  const finish = (ok: boolean) => {
-    pending?.resolve(ok);
-    setPending(null);
-  };
-
-  const element = (
-    <Dialog
-      open={pending !== null}
-      onClose={() => finish(false)}
-      title={pending?.options.title ?? ''}
-      description={pending?.options.description}
-      footer={
-        <>
-          <Button variant="outline" onClick={() => finish(false)}>
-            {pending?.options.cancelLabel ?? t('common.cancel')}
-          </Button>
-          <Button
-            data-autofocus
-            variant={pending?.options.destructive ? 'destructive' : 'default'}
-            onClick={() => finish(true)}
-          >
-            {pending?.options.confirmLabel ?? t('common.confirm')}
-          </Button>
-        </>
-      }
-    />
-  );
-  return [confirm, element];
-}
+export {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogOverlay,
+  DialogPortal,
+  DialogTitle,
+  DialogTrigger,
+};

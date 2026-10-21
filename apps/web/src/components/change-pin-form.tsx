@@ -111,7 +111,7 @@ export function ChangePinForm({ forced }: { forced: boolean }) {
       />
 
       {serverError ? (
-        <Alert variant="error" role="alert">
+        <Alert variant="destructive" role="alert">
           {serverError.status === 0 ? t('network') : errorMessage(serverError.code)}
         </Alert>
       ) : null}

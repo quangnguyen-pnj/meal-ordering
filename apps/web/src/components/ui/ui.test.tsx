@@ -1,10 +1,11 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { formatRange, formatWeekRange } from '@/lib/utils';
 import { shortOrgPath } from '../screens/employees-screen';
-import { useConfirm } from './dialog';
+import { useConfirm } from '@/components/confirm-dialog';
+import { ResponsiveSelect } from '@/components/responsive-select';
 import { normalizeTime } from './time-input';
 
 function ConfirmHarness() {
@@ -25,23 +26,66 @@ function ConfirmHarness() {
   );
 }
 
-describe('confirm dialog', () => {
+describe('confirm dialog (shadcn/ui AlertDialog)', () => {
   it('resolves true on confirm and false on Escape, and returns focus to the opener', async () => {
     render(<ConfirmHarness />);
     const opener = screen.getByRole('button', { name: 'open' });
 
     await userEvent.click(opener);
-    expect(screen.getByRole('dialog', { name: 'Công bố thực đơn?' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Công bố' })).toHaveFocus();
+    expect(screen.getByRole('alertdialog', { name: 'Công bố thực đơn?' })).toBeInTheDocument();
+    // AlertDialog puts the focus on the safe choice first.
+    expect(screen.getByRole('button', { name: 'Hủy' })).toHaveFocus();
     await userEvent.click(screen.getByRole('button', { name: 'Công bố' }));
     expect(screen.getByTestId('answer')).toHaveTextContent('true');
-    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
     expect(opener).toHaveFocus();
 
     await userEvent.click(opener);
     await userEvent.keyboard('{Escape}');
     expect(screen.getByTestId('answer')).toHaveTextContent('false');
-    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+});
+
+describe('ResponsiveSelect', () => {
+  const options = [
+    { value: '', label: 'Tất cả' },
+    { value: 'T2', label: 'Tầng 2' },
+  ];
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('uses the shadcn/ui Select with a mouse, keeping "" as a real option', () => {
+    render(
+      <ResponsiveSelect aria-label="Tầng" value="" onValueChange={() => {}} options={options} />,
+    );
+    const trigger = screen.getByRole('combobox', { name: 'Tầng' });
+    expect(trigger.tagName).toBe('BUTTON');
+    expect(trigger).toHaveTextContent('Tất cả');
+  });
+
+  it("uses the operating system's picker on a touch screen", async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      (query: string) =>
+        ({
+          matches: query === '(pointer: coarse)',
+          addEventListener: () => {},
+          removeEventListener: () => {},
+        }) as unknown as MediaQueryList,
+    );
+    let picked = 'none';
+    render(
+      <ResponsiveSelect
+        aria-label="Tầng"
+        value=""
+        onValueChange={(v) => (picked = v)}
+        options={options}
+      />,
+    );
+    const select = screen.getByRole('combobox', { name: 'Tầng' });
+    expect(select.tagName).toBe('SELECT');
+    await userEvent.selectOptions(select, 'T2');
+    expect(picked).toBe('T2');
   });
 });
 

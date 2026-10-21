@@ -3,16 +3,24 @@
 import type { MasterItemView } from '@meal/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog } from '@/components/ui/dialog';
+import { AppDialog } from '@/components/app-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { LoadingRows } from '@/components/ui/skeleton';
-import { Table, Td, Th } from '@/components/ui/table';
-import { Tabs } from '@/components/ui/tabs';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { api } from '@/lib/api';
 import { apiErrorText } from '@/lib/errors';
 import { t, vi } from '@/messages';
@@ -43,14 +51,21 @@ export function MasterScreen() {
         <CardTitle>{t('master.title')}</CardTitle>
         <CardDescription>{t('master.intro')}</CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <Tabs
-          label={t('master.title')}
-          value={kind}
-          onChange={setKind}
-          tabs={(Object.keys(TAB_LABEL) as Kind[]).map((key) => ({ key, label: TAB_LABEL[key] }))}
-        />
-        <MasterTable key={kind} kind={kind} />
+      <CardContent>
+        <Tabs value={kind} onValueChange={(v) => setKind(v as Kind)}>
+          <TabsList aria-label={t('master.title')}>
+            {(Object.keys(TAB_LABEL) as Kind[]).map((key) => (
+              <TabsTrigger key={key} value={key}>
+                {TAB_LABEL[key]}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          {(Object.keys(TAB_LABEL) as Kind[]).map((key) => (
+            <TabsContent key={key} value={key}>
+              <MasterTable kind={key} />
+            </TabsContent>
+          ))}
+        </Tabs>
       </CardContent>
     </Card>
   );
@@ -89,12 +104,18 @@ function MasterTable({ kind }: { kind: Kind }) {
           ),
     onSuccess: () => {
       setDraft(null);
+      toast.success(t('common.saved'));
       refresh();
     },
   });
   const toggle = useMutation({
     mutationFn: (item: MasterItemView) => api.patch(`${path}/${item.id}`, { active: !item.active }),
-    onSuccess: refresh,
+    onSuccess: (_res, item) => {
+      toast.success(
+        t(item.active ? 'master.deactivated' : 'master.activated', { name: item.name }),
+      );
+      refresh();
+    },
   });
   const error = toggle.error ?? list.error;
   const open = (d: Draft) => {
@@ -109,7 +130,7 @@ function MasterTable({ kind }: { kind: Kind }) {
           {ADD_LABEL[kind]}
         </Button>
       </div>
-      <Dialog
+      <AppDialog
         open={draft !== null}
         onClose={() => setDraft(null)}
         title={draft?.id ? EDIT_LABEL[kind] : ADD_LABEL[kind]}
@@ -127,7 +148,6 @@ function MasterTable({ kind }: { kind: Kind }) {
               <Input
                 id="master-code"
                 required
-                data-autofocus={draft.id === null ? true : undefined}
                 disabled={draft.id !== null}
                 maxLength={32}
                 aria-describedby="master-code-hint"
@@ -143,7 +163,6 @@ function MasterTable({ kind }: { kind: Kind }) {
               <Input
                 id="master-name"
                 required
-                data-autofocus={draft.id !== null ? true : undefined}
                 maxLength={120}
                 value={draft.name}
                 onChange={(e) => setDraft({ ...draft, name: e.target.value })}
@@ -161,7 +180,7 @@ function MasterTable({ kind }: { kind: Kind }) {
                 />
               </div>
             ) : null}
-            {save.error ? <Alert variant="error">{apiErrorText(save.error)}</Alert> : null}
+            {save.error ? <Alert variant="destructive">{apiErrorText(save.error)}</Alert> : null}
             <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
               <Button type="button" variant="outline" onClick={() => setDraft(null)}>
                 {t('common.cancel')}
@@ -172,37 +191,37 @@ function MasterTable({ kind }: { kind: Kind }) {
             </div>
           </form>
         ) : null}
-      </Dialog>
-      {error ? <Alert variant="error">{apiErrorText(error)}</Alert> : null}
+      </AppDialog>
+      {error ? <Alert variant="destructive">{apiErrorText(error)}</Alert> : null}
       {list.isLoading ? <LoadingRows rows={3} /> : null}
       <Table containerClassName={list.isLoading ? 'hidden' : undefined} className="min-w-[36rem]">
-        <thead>
-          <tr>
-            <Th>{t('common.code')}</Th>
-            <Th>{t('common.name')}</Th>
-            {isFloor ? <Th>{t('master.sortOrder')}</Th> : null}
-            {kind === 'cost-centers' ? <Th>{t('master.source')}</Th> : null}
-            <Th>{t('master.usage')}</Th>
-            <Th>{t('common.status')}</Th>
-            <Th className="text-right">{t('common.actions')}</Th>
-          </tr>
-        </thead>
-        <tbody>
+        <TableHeader>
+          <TableRow>
+            <TableHead>{t('common.code')}</TableHead>
+            <TableHead>{t('common.name')}</TableHead>
+            {isFloor ? <TableHead>{t('master.sortOrder')}</TableHead> : null}
+            {kind === 'cost-centers' ? <TableHead>{t('master.source')}</TableHead> : null}
+            <TableHead>{t('master.usage')}</TableHead>
+            <TableHead>{t('common.status')}</TableHead>
+            <TableHead className="text-right">{t('common.actions')}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {(list.data?.items ?? []).map((item) => (
-            <tr key={item.id} className={item.active ? undefined : 'text-muted-foreground'}>
-              <Td className="font-mono">{item.code}</Td>
-              <Td>{item.name}</Td>
-              {isFloor ? <Td>{item.sortOrder}</Td> : null}
+            <TableRow key={item.id} className={item.active ? undefined : 'text-muted-foreground'}>
+              <TableCell className="font-mono">{item.code}</TableCell>
+              <TableCell>{item.name}</TableCell>
+              {isFloor ? <TableCell>{item.sortOrder}</TableCell> : null}
               {kind === 'cost-centers' ? (
-                <Td>{item.source ? vi.master.sources[item.source] : null}</Td>
+                <TableCell>{item.source ? vi.master.sources[item.source] : null}</TableCell>
               ) : null}
-              <Td>{item.usageCount}</Td>
-              <Td>
+              <TableCell>{item.usageCount}</TableCell>
+              <TableCell>
                 <Badge variant={item.active ? 'success' : 'outline'}>
                   {item.active ? t('common.active') : t('common.inactive')}
                 </Badge>
-              </Td>
-              <Td className="text-right">
+              </TableCell>
+              <TableCell className="text-right">
                 <div className="flex justify-end gap-1">
                   <Button
                     variant="ghost"
@@ -222,17 +241,17 @@ function MasterTable({ kind }: { kind: Kind }) {
                     {item.active ? t('common.deactivate') : t('common.activate')}
                   </Button>
                 </div>
-              </Td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ))}
           {list.data && list.data.items.length === 0 ? (
-            <tr>
-              <Td colSpan={7} className="text-muted-foreground">
+            <TableRow>
+              <TableCell colSpan={7} className="text-muted-foreground">
                 {t('master.empty')}
-              </Td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ) : null}
-        </tbody>
+        </TableBody>
       </Table>
     </div>
   );

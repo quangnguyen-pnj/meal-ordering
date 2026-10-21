@@ -123,3 +123,11 @@ A UI/UX pass over every P1 screen, asked for after a review. No business rule ch
 - **Menu builder:** each day has "Thêm món", which opens a picker; this replaces "select a day, then Thêm in the library". Dragging from the library stays on wide screens. The unusual-mix note (BR-13) only shows once a day has dishes. Publishing is confirmed in a dialog that repeats the deadline.
 - **Login:** Microsoft stays on top (staff with a company email); code + PIN below for workers. PIN fields have a show/hide toggle. Employee codes are not upper-cased on the client while Q4 is open.
 - **Rule 3 fix:** the "dish removed" notice said "trước 08:00"; it now uses `lockTime` from the notice payload (the `day.lockTime` setting when the menu was edited). Older notices without it say "trước giờ khóa".
+
+### shadcn/ui throughout
+
+- **Every UI primitive is shadcn/ui** (`apps/web/components.json`, style new-york, Tailwind 3 with `tailwindcss-animate`): Button, Input, Label, Card, Badge, Alert, Table, Tabs, Checkbox, Dialog, AlertDialog, Sheet, Select, Popover, Command, DropdownMenu, Tooltip, Separator, Skeleton and Sonner. Add new ones with `pnpm dlx shadcn@latest add <name>` from `apps/web`. Local changes to the generated files: 44 px touch sizes, `warning`/`success` variants on Alert and Badge, `CardTitle` is the page `<h1>`.
+- **Selects follow the device** (`ResponsiveSelect`): a native `<select>` styled like the trigger when the primary pointer is a finger (`(pointer: coarse)`, phones and tablets), so the OS picker opens; the Radix Select with a mouse. Radix reserves `""`, so "Tất cả" / "Kế thừa" travel as a sentinel inside the component.
+- **Dialogs return focus to their opener.** Radix only does that for a `Dialog.Trigger`; ours open from code (row menus, handlers), so `AppDialog` and `useConfirm` remember the opener when they open. Confirmations use AlertDialog (Cancel has the first focus, a click outside does nothing); the one-time PIN is an AlertDialog too.
+- **Success messages are toasts** (Sonner), with "Hoàn tác" where a change can be reversed (org mapping, archiving a dish). Errors stay inline next to what failed.
+- **Kept outside shadcn:** the org tree (no tree primitive), the menu builder's drag-and-drop (dnd-kit), the 24-hour time and PIN fields (built on Input).

@@ -2,9 +2,18 @@
 
 import type { EmployeeMappingView } from '@meal/shared';
 import { useQuery } from '@tanstack/react-query';
-import { X } from 'lucide-react';
-import { useId, useState } from 'react';
-import { Input } from '@/components/ui/input';
+import { ChevronsUpDown, X } from 'lucide-react';
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Spinner } from '@/components/ui/skeleton';
 import { useDebounced } from '@/hooks/use-debounced';
 import { api } from '@/lib/api';
@@ -14,8 +23,8 @@ import { t } from '@/messages';
 export type PickedEmployee = Pick<EmployeeMappingView, 'employeeCode' | 'name' | 'orgPath'>;
 
 /**
- * Search-as-you-type employee chooser, so an admin sees the name before granting a role instead of
- * trusting a typed code. Searches the caller's own scope through /employees.
+ * Employee combobox (shadcn/ui Popover + Command), so an admin sees the name before granting a
+ * role instead of trusting a typed code. Searches the caller's own scope through /employees.
  */
 export function EmployeePicker({
   id,
@@ -28,10 +37,8 @@ export function EmployeePicker({
   onChange: (employee: PickedEmployee | null) => void;
   placeholder?: string;
 }) {
-  const listId = useId();
-  const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
-  const [active, setActive] = useState(0);
+  const [q, setQ] = useState('');
   const term = useDebounced(q.trim(), 250);
 
   const search = useQuery({
@@ -40,105 +47,102 @@ export function EmployeePicker({
       api.get<{ items: EmployeeMappingView[] }>(
         `/employees?${new URLSearchParams({ q: term, status: 'ACTIVE', limit: '8', offset: '0' })}`,
       ),
-    enabled: term.length >= 2,
+    enabled: open && term.length >= 2,
   });
   const items = term.length >= 2 ? (search.data?.items ?? []) : [];
 
-  if (value) {
-    return (
-      <div className="flex min-h-11 items-center justify-between gap-2 rounded-md border border-input bg-muted/40 px-3 py-1.5">
-        <div className="min-w-0 text-sm">
-          <p className="truncate font-medium">{value.name}</p>
-          <p className="truncate text-xs text-muted-foreground">
-            <span className="font-mono">{value.employeeCode}</span> · {value.orgPath}
-          </p>
-        </div>
-        <button
+  return (
+    <div className="flex w-full items-center gap-1">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            id={id}
+            type="button"
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className={cn(
+              'h-auto min-h-11 w-full justify-between px-3 py-1.5 text-left font-normal',
+              !value && 'text-muted-foreground',
+            )}
+          >
+            {value ? (
+              <span className="min-w-0">
+                <span className="block truncate font-medium text-foreground">{value.name}</span>
+                <span className="block truncate text-xs text-muted-foreground">
+                  <span className="font-mono">{value.employeeCode}</span> · {value.orgPath}
+                </span>
+              </span>
+            ) : (
+              <span>{placeholder}</span>
+            )}
+            <ChevronsUpDown className="h-4 w-4 opacity-50" aria-hidden />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[--radix-popover-trigger-width] min-w-72 p-0" align="start">
+          <Command shouldFilter={false}>
+            <CommandInput placeholder={t('employeePicker.search')} value={q} onValueChange={setQ} />
+            <CommandList>
+              {search.isFetching ? (
+                <div className="flex justify-center py-4">
+                  <Spinner className="text-muted-foreground" />
+                </div>
+              ) : null}
+              {!search.isFetching && term.length >= 2 ? (
+                <CommandEmpty>
+                  {search.error ? t('employeePicker.error') : t('employeePicker.noResult')}
+                </CommandEmpty>
+              ) : null}
+              {term.length < 2 ? (
+                <p className="px-3 py-4 text-center text-sm text-muted-foreground">
+                  {t('employeePicker.hint')}
+                </p>
+              ) : null}
+              {items.length > 0 ? (
+                <CommandGroup>
+                  {items.map((e) => (
+                    <CommandItem
+                      key={e.employeeCode}
+                      value={e.employeeCode}
+                      onSelect={() => {
+                        onChange({
+                          employeeCode: e.employeeCode,
+                          name: e.name,
+                          orgPath: e.orgPath,
+                        });
+                        setQ('');
+                        setOpen(false);
+                      }}
+                    >
+                      <span className="min-w-0">
+                        <span className="block font-medium">
+                          {e.name}{' '}
+                          <span className="font-mono text-xs text-muted-foreground">
+                            {e.employeeCode}
+                          </span>
+                        </span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {e.orgPath}
+                        </span>
+                      </span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ) : null}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+      {value ? (
+        <Button
           type="button"
-          className="rounded p-1 text-muted-foreground hover:text-foreground"
+          variant="ghost"
+          size="icon"
           aria-label={t('employeePicker.clear')}
           onClick={() => onChange(null)}
         >
-          <X className="h-4 w-4" aria-hidden />
-        </button>
-      </div>
-    );
-  }
-
-  const choose = (e: EmployeeMappingView) => {
-    onChange({ employeeCode: e.employeeCode, name: e.name, orgPath: e.orgPath });
-    setQ('');
-    setOpen(false);
-  };
-
-  return (
-    <div className="relative">
-      <Input
-        id={id}
-        role="combobox"
-        aria-expanded={open && term.length >= 2}
-        aria-controls={listId}
-        aria-autocomplete="list"
-        autoComplete="off"
-        placeholder={placeholder}
-        value={q}
-        onChange={(e) => {
-          setQ(e.target.value);
-          setOpen(true);
-          setActive(0);
-        }}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
-        onKeyDown={(e) => {
-          if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            setActive((a) => Math.min(a + 1, items.length - 1));
-          } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            setActive((a) => Math.max(a - 1, 0));
-          } else if (e.key === 'Enter' && open && items[active]) {
-            e.preventDefault();
-            choose(items[active]);
-          } else if (e.key === 'Escape') {
-            setOpen(false);
-          }
-        }}
-      />
-      {search.isFetching ? (
-        <Spinner className="absolute right-3 top-3.5 text-muted-foreground" />
-      ) : null}
-      {open && term.length >= 2 ? (
-        <ul
-          id={listId}
-          role="listbox"
-          className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-md border bg-card p-1 shadow-lg"
-        >
-          {items.map((e, i) => (
-            <li
-              key={e.employeeCode}
-              role="option"
-              aria-selected={i === active}
-              className={cn(
-                'cursor-pointer rounded px-2 py-1.5 text-sm',
-                i === active && 'bg-accent',
-              )}
-              onMouseDown={(ev) => ev.preventDefault()}
-              onMouseEnter={() => setActive(i)}
-              onClick={() => choose(e)}
-            >
-              <p className="font-medium">
-                {e.name}{' '}
-                <span className="font-mono text-xs text-muted-foreground">{e.employeeCode}</span>
-              </p>
-              <p className="truncate text-xs text-muted-foreground">{e.orgPath}</p>
-            </li>
-          ))}
-          {!search.isFetching && items.length === 0 ? (
-            <li className="px-2 py-1.5 text-sm text-muted-foreground">
-              {search.error ? t('employeePicker.error') : t('employeePicker.noResult')}
-            </li>
-          ) : null}
-        </ul>
+          <X className="h-4 w-4" />
+        </Button>
       ) : null}
     </div>
   );

@@ -2,17 +2,44 @@
 
 import type { EmployeeMappingView, MasterItemView, ResetPinResult } from '@meal/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { KeyRound, MoreHorizontal, Wallet } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { toast } from 'sonner';
+import { AppDialog } from '@/components/app-dialog';
+import { returnFocus, useConfirm } from '@/components/confirm-dialog';
+import { ResponsiveSelect } from '@/components/responsive-select';
 import { Alert } from '@/components/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, useConfirm } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
 import { LoadingRows } from '@/components/ui/skeleton';
-import { Table, Td, Th } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useDebounced } from '@/hooks/use-debounced';
 import { api } from '@/lib/api';
 import { apiErrorText } from '@/lib/errors';
@@ -46,7 +73,7 @@ function MealUnit({ e }: { e: EmployeeMappingView }) {
   return e.mealStatus === 'OK' ? (
     <>{e.mealUnitName}</>
   ) : (
-    <Badge variant="error">{vi.employees.mealStatuses[e.mealStatus]}</Badge>
+    <Badge variant="destructive">{vi.employees.mealStatuses[e.mealStatus]}</Badge>
   );
 }
 
@@ -79,8 +106,18 @@ export function EmployeesScreen({ canManageOrg }: { canManageOrg: boolean }) {
     costCenterId: '',
   });
   const [offset, setOffset] = useState(0);
-  const [tempPin, setTempPin] = useState<{ name: string; code: string; pin: string } | null>(null);
-  const [overrideFor, setOverrideFor] = useState<EmployeeMappingView | null>(null);
+  const [tempPin, setTempPin] = useState<{
+    name: string;
+    code: string;
+    pin: string;
+    trigger: HTMLElement | null;
+  } | null>(null);
+  // The row's menu button goes with each dialog, so focus can return to it afterwards.
+  const [overrideFor, setOverrideFor] = useState<{
+    employee: EmployeeMappingView;
+    trigger: HTMLElement | null;
+  } | null>(null);
+  const [overrideCc, setOverrideCc] = useState('');
   const q = useDebounced(filters.q.trim());
 
   const query = new URLSearchParams({ offset: String(offset), limit: String(PAGE) });
@@ -107,27 +144,29 @@ export function EmployeesScreen({ canManageOrg }: { canManageOrg: boolean }) {
   });
 
   const resetPin = useMutation({
-    mutationFn: (e: EmployeeMappingView) =>
+    mutationFn: ({ e }: { e: EmployeeMappingView; trigger: HTMLElement | null }) =>
       api.post<ResetPinResult>(`/employees/${encodeURIComponent(e.employeeCode)}/pin/reset`),
-    onSuccess: (res, e) =>
-      setTempPin({ name: e.name, code: e.employeeCode, pin: res.temporaryPin }),
+    onSuccess: (res, { e, trigger }) =>
+      setTempPin({ name: e.name, code: e.employeeCode, pin: res.temporaryPin, trigger }),
   });
   const setOverride = useMutation({
     mutationFn: ({ code, costCenterId }: { code: string; costCenterId: string | null }) =>
       api.put(`/employees/${encodeURIComponent(code)}/cost-center-override`, { costCenterId }),
     onSuccess: () => {
       setOverrideFor(null);
+      toast.success(t('employees.overrideSaved'));
       void qc.invalidateQueries({ queryKey: ['/employees'] });
     },
   });
 
-  async function askResetPin(e: EmployeeMappingView) {
+  async function askResetPin(e: EmployeeMappingView, trigger: HTMLElement | null) {
     const ok = await confirm({
       title: t('employees.resetPinTitle'),
       description: t('employees.resetPinConfirm', { name: e.name }),
       confirmLabel: t('employees.resetPin'),
+      returnFocusTo: trigger,
     });
-    if (ok) resetPin.mutate(e);
+    if (ok) resetPin.mutate({ e, trigger });
   }
 
   const update = (patch: Partial<Filters>) => {
@@ -145,40 +184,30 @@ export function EmployeesScreen({ canManageOrg }: { canManageOrg: boolean }) {
   ) => (
     <div className="flex w-full flex-col gap-2 sm:w-48">
       <Label htmlFor={`f-${id}`}>{label}</Label>
-      <Select id={`f-${id}`} value={filters[id]} onChange={(e) => update({ [id]: e.target.value })}>
-        <option value="">{t('common.all')}</option>
-        {(options ?? []).map((o) => (
-          <option key={o.id} value={o.id}>
-            {o.code} · {o.name}
-          </option>
-        ))}
-      </Select>
+      <ResponsiveSelect
+        id={`f-${id}`}
+        value={filters[id]}
+        onValueChange={(v) => update({ [id]: v })}
+        options={[
+          { value: '', label: t('common.all') },
+          ...(options ?? []).map((o) => ({ value: o.id, label: `${o.code} · ${o.name}` })),
+        ]}
+      />
     </div>
   );
 
   const actions = (e: EmployeeMappingView) => (
-    <>
-      {canManageOrg ? (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            setOverride.reset();
-            setOverrideFor(e);
-          }}
-        >
-          {t('employees.override')}
-        </Button>
-      ) : null}
-      <Button
-        variant="ghost"
-        size="sm"
-        disabled={resetPin.isPending}
-        onClick={() => askResetPin(e)}
-      >
-        {t('employees.resetPin')}
-      </Button>
-    </>
+    <RowActions
+      employee={e}
+      canManageOrg={canManageOrg}
+      resetPending={resetPin.isPending}
+      onOverride={(trigger) => {
+        setOverride.reset();
+        setOverrideCc(e.costCenterOverrideId ?? '');
+        setOverrideFor({ employee: e, trigger });
+      }}
+      onResetPin={(trigger) => askResetPin(e, trigger)}
+    />
   );
 
   return (
@@ -204,30 +233,31 @@ export function EmployeesScreen({ canManageOrg }: { canManageOrg: boolean }) {
           </div>
           <div className="col-span-2 flex w-full flex-col gap-2 sm:w-56">
             <Label htmlFor="f-meal">{t('employees.mealStatus')}</Label>
-            <Select
+            <ResponsiveSelect
               id="f-meal"
               value={filters.mealStatus}
-              onChange={(e) => update({ mealStatus: e.target.value })}
-            >
-              <option value="">{t('common.all')}</option>
-              {Object.entries(vi.employees.mealStatuses).map(([k, label]) => (
-                <option key={k} value={k}>
-                  {label}
-                </option>
-              ))}
-            </Select>
+              onValueChange={(v) => update({ mealStatus: v })}
+              options={[
+                { value: '', label: t('common.all') },
+                ...Object.entries(vi.employees.mealStatuses).map(([k, label]) => ({
+                  value: k,
+                  label,
+                })),
+              ]}
+            />
           </div>
           <div className="flex w-full flex-col gap-2 sm:w-40">
             <Label htmlFor="f-status">{t('employees.statusFilter')}</Label>
-            <Select
+            <ResponsiveSelect
               id="f-status"
               value={filters.status}
-              onChange={(e) => update({ status: e.target.value })}
-            >
-              <option value="">{t('common.all')}</option>
-              <option value="ACTIVE">{vi.employees.status.ACTIVE}</option>
-              <option value="LEFT">{vi.employees.status.LEFT}</option>
-            </Select>
+              onValueChange={(v) => update({ status: v })}
+              options={[
+                { value: '', label: t('common.all') },
+                { value: 'ACTIVE', label: vi.employees.status.ACTIVE },
+                { value: 'LEFT', label: vi.employees.status.LEFT },
+              ]}
+            />
           </div>
           {canManageOrg ? (
             <>
@@ -238,7 +268,7 @@ export function EmployeesScreen({ canManageOrg }: { canManageOrg: boolean }) {
           ) : null}
         </div>
 
-        {error ? <Alert variant="error">{apiErrorText(error)}</Alert> : null}
+        {error ? <Alert variant="destructive">{apiErrorText(error)}</Alert> : null}
 
         <p className="text-sm text-muted-foreground" aria-live="polite">
           {list.data ? formatRange(offset, items.length, total) : ' '}
@@ -280,52 +310,59 @@ export function EmployeesScreen({ canManageOrg }: { canManageOrg: boolean }) {
                       </>
                     ) : null}
                   </dl>
-                  <div className="-mx-3 -mb-2 mt-1 flex flex-wrap justify-end">{actions(e)}</div>
+                  <div className="-mb-1 -mr-2 flex justify-end">{actions(e)}</div>
                 </li>
               ))}
             </ul>
 
             <Table containerClassName="hidden md:block" className="min-w-[56rem]">
-              <thead>
-                <tr>
-                  <Th>{t('employees.employee')}</Th>
-                  <Th>{t('org.path')}</Th>
-                  <Th>{t('org.mealUnit')}</Th>
-                  <Th>{t('org.floor')}</Th>
-                  <Th>{t('org.costCenter')}</Th>
-                  <Th>{t('employees.roles')}</Th>
-                  <Th className="text-right">{t('common.actions')}</Th>
-                </tr>
-              </thead>
-              <tbody>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t('employees.employee')}</TableHead>
+                  <TableHead>{t('org.path')}</TableHead>
+                  <TableHead>{t('org.mealUnit')}</TableHead>
+                  <TableHead>{t('org.floor')}</TableHead>
+                  <TableHead>{t('org.costCenter')}</TableHead>
+                  <TableHead>{t('employees.roles')}</TableHead>
+                  <TableHead className="text-right">{t('common.actions')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {items.map((e) => (
-                  <tr
+                  <TableRow
                     key={e.employeeCode}
                     className={e.status === 'LEFT' ? 'text-muted-foreground' : undefined}
                   >
-                    <Td className="whitespace-nowrap">
+                    <TableCell className="whitespace-nowrap">
                       <span className="font-medium">{e.name}</span>
                       <span className="block font-mono text-xs text-muted-foreground">
                         {e.employeeCode}
                       </span>
-                    </Td>
-                    <Td className="min-w-44 max-w-60 text-xs" title={e.orgPath}>
-                      {shortOrgPath(e.orgPath)}
-                    </Td>
-                    <Td className="whitespace-nowrap">
+                    </TableCell>
+                    <TableCell className="min-w-44 max-w-60 text-xs">
+                      <Tooltip>
+                        <TooltipTrigger className="text-left">
+                          {shortOrgPath(e.orgPath)}
+                        </TooltipTrigger>
+                        <TooltipContent>{e.orgPath}</TooltipContent>
+                      </Tooltip>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
                       <MealUnit e={e} />
-                    </Td>
-                    <Td className="whitespace-nowrap">{e.floorName ?? t('common.none')}</Td>
-                    <Td className="min-w-52">
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {e.floorName ?? t('common.none')}
+                    </TableCell>
+                    <TableCell className="min-w-52">
                       <CostCenter e={e} />
-                    </Td>
-                    <Td className="text-xs">{roleText(e)}</Td>
-                    <Td className="text-right">
-                      <div className="flex justify-end gap-1">{actions(e)}</div>
-                    </Td>
-                  </tr>
+                    </TableCell>
+                    <TableCell className="text-xs">{roleText(e)}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end">{actions(e)}</div>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
+              </TableBody>
             </Table>
             {total === 0 ? (
               <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
@@ -357,28 +394,32 @@ export function EmployeesScreen({ canManageOrg }: { canManageOrg: boolean }) {
 
       {confirmElement}
 
-      <Dialog
-        open={tempPin !== null}
-        onClose={() => setTempPin(null)}
-        dismissible={false}
-        title={t('employees.temporaryPinTitle')}
-        description={tempPin ? `${tempPin.name} · ${tempPin.code}` : undefined}
-        footer={
-          <Button data-autofocus onClick={() => setTempPin(null)}>
-            {t('employees.temporaryPinDone')}
-          </Button>
-        }
-      >
-        <p className="my-2 rounded-md border bg-muted py-4 text-center font-mono text-4xl font-semibold tracking-[0.3em]">
-          {tempPin?.pin}
-        </p>
-        <Alert variant="warning">{t('employees.temporaryPinHint')}</Alert>
-      </Dialog>
+      {/* An AlertDialog: the one-time PIN closes only with the button, never by a stray click. */}
+      <AlertDialog open={tempPin !== null}>
+        <AlertDialogContent onCloseAutoFocus={(ev) => returnFocus(ev, tempPin?.trigger)}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('employees.temporaryPinTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {tempPin ? `${tempPin.name} · ${tempPin.code}` : ''}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <p className="rounded-md border bg-muted py-4 text-center font-mono text-4xl font-semibold tracking-[0.3em]">
+            {tempPin?.pin}
+          </p>
+          <Alert variant="warning">{t('employees.temporaryPinHint')}</Alert>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setTempPin(null)}>
+              {t('employees.temporaryPinDone')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
-      <Dialog
+      <AppDialog
         open={overrideFor !== null}
         onClose={() => setOverrideFor(null)}
-        title={t('employees.overrideTitle', { name: overrideFor?.name ?? '' })}
+        returnFocusTo={overrideFor?.trigger}
+        title={t('employees.overrideTitle', { name: overrideFor?.employee.name ?? '' })}
         description={t('employees.overrideHint')}
       >
         <form
@@ -387,28 +428,26 @@ export function EmployeesScreen({ canManageOrg }: { canManageOrg: boolean }) {
           onSubmit={(e) => {
             e.preventDefault();
             if (!overrideFor) return;
-            const value = new FormData(e.currentTarget).get('cc') as string;
-            setOverride.mutate({ code: overrideFor.employeeCode, costCenterId: value || null });
+            setOverride.mutate({
+              code: overrideFor.employee.employeeCode,
+              costCenterId: overrideCc || null,
+            });
           }}
         >
           <Label htmlFor="override-cc">{t('org.costCenter')}</Label>
-          <Select
+          <ResponsiveSelect
             id="override-cc"
-            name="cc"
-            data-autofocus
-            defaultValue={overrideFor?.costCenterOverrideId ?? ''}
-          >
-            <option value="">{t('employees.clearOverride')}</option>
-            {(costCenters.data?.items ?? [])
-              .filter((c) => c.active)
-              .map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.code} · {c.name}
-                </option>
-              ))}
-          </Select>
+            value={overrideCc}
+            onValueChange={setOverrideCc}
+            options={[
+              { value: '', label: t('employees.clearOverride') },
+              ...(costCenters.data?.items ?? [])
+                .filter((c) => c.active)
+                .map((c) => ({ value: c.id, label: `${c.code} · ${c.name}` })),
+            ]}
+          />
           {setOverride.error ? (
-            <Alert variant="error">{apiErrorText(setOverride.error)}</Alert>
+            <Alert variant="destructive">{apiErrorText(setOverride.error)}</Alert>
           ) : null}
           <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
             <Button type="button" variant="outline" onClick={() => setOverrideFor(null)}>
@@ -419,7 +458,51 @@ export function EmployeesScreen({ canManageOrg }: { canManageOrg: boolean }) {
             </Button>
           </div>
         </form>
-      </Dialog>
+      </AppDialog>
     </Card>
+  );
+}
+
+/** The row's "…" menu (shadcn/ui DropdownMenu). Its button is where focus returns afterwards. */
+function RowActions({
+  employee: e,
+  canManageOrg,
+  resetPending,
+  onOverride,
+  onResetPin,
+}: {
+  employee: EmployeeMappingView;
+  canManageOrg: boolean;
+  resetPending: boolean;
+  onOverride: (trigger: HTMLElement | null) => void;
+  onResetPin: (trigger: HTMLElement | null) => void;
+}) {
+  const trigger = useRef<HTMLButtonElement>(null);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          ref={trigger}
+          variant="ghost"
+          size="icon"
+          aria-label={t('employees.actionsFor', { name: e.name })}
+        >
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuLabel className="max-w-56 truncate">{e.name}</DropdownMenuLabel>
+        {canManageOrg ? (
+          <DropdownMenuItem onSelect={() => onOverride(trigger.current)}>
+            <Wallet aria-hidden />
+            {t('employees.override')}
+          </DropdownMenuItem>
+        ) : null}
+        <DropdownMenuItem disabled={resetPending} onSelect={() => onResetPin(trigger.current)}>
+          <KeyRound aria-hidden />
+          {t('employees.resetPin')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

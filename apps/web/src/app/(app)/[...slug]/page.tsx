@@ -19,7 +19,7 @@ export default async function PlaceholderPage({ params }: { params: Promise<{ sl
 
   const user = await getSession();
   if (!user || !isNavItemVisible(item, user.roles)) {
-    return <Alert variant="error">{t('placeholder.forbidden')}</Alert>;
+    return <Alert variant="destructive">{t('placeholder.forbidden')}</Alert>;
   }
 
   return (

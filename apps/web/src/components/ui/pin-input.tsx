@@ -3,6 +3,7 @@
 import { Eye, EyeOff } from 'lucide-react';
 import * as React from 'react';
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { t } from '@/messages';
 
@@ -22,9 +23,11 @@ export const PinInput = React.forwardRef<
         className="pr-12 tracking-widest"
         {...props}
       />
-      <button
+      <Button
         type="button"
-        className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        variant="ghost"
+        size="icon"
+        className="absolute inset-y-0 right-0 h-full rounded-l-none text-muted-foreground hover:bg-transparent"
         aria-label={visible ? t('common.hidePin') : t('common.showPin')}
         aria-pressed={visible}
         onClick={() => setVisible((v) => !v)}
@@ -34,7 +37,7 @@ export const PinInput = React.forwardRef<
         ) : (
           <Eye className="h-4 w-4" aria-hidden />
         )}
-      </button>
+      </Button>
     </div>
   );
 });

@@ -10,18 +10,27 @@ import type {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { useConfirm } from '@/components/confirm-dialog';
 import { EmployeePicker, type PickedEmployee } from '@/components/employee-picker';
+import { ResponsiveSelect } from '@/components/responsive-select';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useConfirm } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
 import { LoadingRows } from '@/components/ui/skeleton';
-import { Table, Td, Th } from '@/components/ui/table';
-import { Tabs } from '@/components/ui/tabs';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ApiError, api } from '@/lib/api';
 import { apiErrorText } from '@/lib/errors';
 import { cn } from '@/lib/utils';
@@ -71,25 +80,31 @@ export function OrgScreen() {
             {sync.isPending ? t('org.syncing') : t('org.sync')}
           </Button>
         </div>
-        {sync.error ? <Alert variant="error">{apiErrorText(sync.error)}</Alert> : null}
+        {sync.error ? <Alert variant="destructive">{apiErrorText(sync.error)}</Alert> : null}
         {syncNotice ? <Alert role="status">{syncNotice}</Alert> : null}
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <Tabs
-          label={t('org.title')}
-          value={tab}
-          onChange={setTab}
-          tabs={(Object.keys(vi.org.tabs) as Tab[]).map((key) => ({
-            key,
-            label: vi.org.tabs[key],
-          }))}
-        />
-        {tab === 'tree' ? <TreeTab /> : null}
-        {tab === 'unassigned' ? <EmployeeList path="/admin/org/unassigned" showReason /> : null}
-        {tab === 'missingCostCenter' ? (
-          <EmployeeList path="/admin/org/missing-cost-center" />
-        ) : null}
-        {tab === 'importExport' ? <ImportExportTab /> : null}
+      <CardContent>
+        <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
+          <TabsList aria-label={t('org.title')}>
+            {(Object.keys(vi.org.tabs) as Tab[]).map((key) => (
+              <TabsTrigger key={key} value={key}>
+                {vi.org.tabs[key]}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          <TabsContent value="tree">
+            <TreeTab />
+          </TabsContent>
+          <TabsContent value="unassigned">
+            <EmployeeList path="/admin/org/unassigned" showReason />
+          </TabsContent>
+          <TabsContent value="missingCostCenter">
+            <EmployeeList path="/admin/org/missing-cost-center" />
+          </TabsContent>
+          <TabsContent value="importExport">
+            <ImportExportTab />
+          </TabsContent>
+        </Tabs>
       </CardContent>
     </Card>
   );
@@ -190,7 +205,7 @@ function TreeTab() {
             </span>
             <span className="font-mono text-xs text-muted-foreground">{n.dmpCode}</span>
             {n.isMealUnit ? (
-              <Badge variant={n.mealUnitValid ? 'success' : 'error'}>
+              <Badge variant={n.mealUnitValid ? 'success' : 'destructive'}>
                 {n.mealUnitValid ? t('org.mealUnit') : t('org.mealUnitInvalid')}
               </Badge>
             ) : null}
@@ -208,7 +223,7 @@ function TreeTab() {
     );
   };
 
-  if (tree.error) return <Alert variant="error">{apiErrorText(tree.error)}</Alert>;
+  if (tree.error) return <Alert variant="destructive">{apiErrorText(tree.error)}</Alert>;
   if (tree.isLoading) return <LoadingRows rows={8} />;
   const selected = selectedId ? byId.get(selectedId) : undefined;
 
@@ -255,11 +270,6 @@ function NodeDetail({ node, byId }: { node: OrgUnitView; byId: Map<string, OrgUn
   const costCenters = useMaster('cost-centers');
   const [adminPick, setAdminPick] = useState<PickedEmployee | null>(null);
   const [confirm, confirmElement] = useConfirm();
-  // The last auto-saved change, so a misclick can be undone (each change is audited).
-  const [lastChange, setLastChange] = useState<{ label: string; revert: OrgUnitUpdate } | null>(
-    null,
-  );
-  const [undone, setUndone] = useState(false);
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: ['/admin/org/tree'] });
     void qc.invalidateQueries({ queryKey: ['/admin/org/unassigned'] });
@@ -270,8 +280,18 @@ function NodeDetail({ node, byId }: { node: OrgUnitView; byId: Map<string, OrgUn
     mutationFn: (v: { patch: OrgUnitUpdate; label: string; revert: OrgUnitUpdate | null }) =>
       api.patch(`/admin/org/units/${node.id}`, v.patch),
     onSuccess: (_res, v) => {
-      setLastChange(v.revert ? { label: v.label, revert: v.revert } : null);
-      setUndone(v.revert === null);
+      // Each change saves at once (and is audited); the toast offers a way back from a misclick.
+      const revert = v.revert;
+      if (revert) {
+        toast.success(t('org.autoSaved', { field: v.label }), {
+          action: {
+            label: t('common.undo'),
+            onClick: () => update.mutate({ patch: revert, label: v.label, revert: null }),
+          },
+        });
+      } else {
+        toast.success(t('org.undone'));
+      }
       refresh();
     },
   });
@@ -318,21 +338,18 @@ function NodeDetail({ node, byId }: { node: OrgUnitView; byId: Map<string, OrgUn
     return (
       <div className="flex flex-col gap-2">
         <Label htmlFor={`node-${key}`}>{label}</Label>
-        <Select
+        <ResponsiveSelect
           id={`node-${key}`}
           value={node.own[key] ?? ''}
           disabled={update.isPending}
-          onChange={(e) => change({ [key]: e.target.value || null }, label)}
-        >
-          <option value="">{inheritLabel}</option>
-          {options
-            .filter((o) => o.active || o.id === node.own[key])
-            .map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.code} · {o.name}
-              </option>
-            ))}
-        </Select>
+          onValueChange={(v) => change({ [key]: v || null }, label)}
+          options={[
+            { value: '', label: inheritLabel },
+            ...options
+              .filter((o) => o.active || o.id === node.own[key])
+              .map((o) => ({ value: o.id, label: `${o.code} · ${o.name}` })),
+          ]}
+        />
       </div>
     );
   };
@@ -348,36 +365,16 @@ function NodeDetail({ node, byId }: { node: OrgUnitView; byId: Map<string, OrgUn
         </p>
       </div>
       <label className="flex min-h-11 items-center gap-2 text-sm">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={node.isMealUnit}
           disabled={update.isPending}
-          onChange={(e) => change({ isMealUnit: e.target.checked }, t('org.mealUnit'))}
+          onCheckedChange={(v) => change({ isMealUnit: v === true }, t('org.mealUnit'))}
         />
         {t('org.mealUnit')}
         {node.isMealUnit && !node.mealUnitValid ? (
-          <Badge variant="error">{t('org.mealUnitInvalid')}</Badge>
+          <Badge variant="destructive">{t('org.mealUnitInvalid')}</Badge>
         ) : null}
       </label>
-      {lastChange || undone ? (
-        <Alert role="status" className="flex items-center justify-between gap-2 py-2">
-          <span>
-            {undone ? t('org.undone') : t('org.autoSaved', { field: lastChange?.label ?? '' })}
-          </span>
-          {lastChange && !undone ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={update.isPending}
-              onClick={() =>
-                update.mutate({ patch: lastChange.revert, label: lastChange.label, revert: null })
-              }
-            >
-              {t('common.undo')}
-            </Button>
-          ) : null}
-        </Alert>
-      ) : null}
       {field('floorId', 'floor', t('org.floor'), floors.data?.items ?? [])}
       {field('canteenId', 'canteen', t('org.canteen'), canteens.data?.items ?? [])}
       {field('costCenterId', 'costCenter', t('org.costCenter'), costCenters.data?.items ?? [])}
@@ -433,7 +430,7 @@ function NodeDetail({ node, byId }: { node: OrgUnitView; byId: Map<string, OrgUn
           </Button>
         </form>
       </div>
-      {error ? <Alert variant="error">{apiErrorText(error)}</Alert> : null}
+      {error ? <Alert variant="destructive">{apiErrorText(error)}</Alert> : null}
     </div>
   );
 }
@@ -443,7 +440,7 @@ function EmployeeList({ path, showReason = false }: { path: string; showReason?:
     queryKey: [path],
     queryFn: () => api.get<{ items: EmployeeMappingView[] }>(path),
   });
-  if (list.error) return <Alert variant="error">{apiErrorText(list.error)}</Alert>;
+  if (list.error) return <Alert variant="destructive">{apiErrorText(list.error)}</Alert>;
   if (list.isLoading) return <LoadingRows rows={6} />;
   const items = list.data?.items ?? [];
   const reason = (e: EmployeeMappingView) =>
@@ -456,31 +453,35 @@ function EmployeeList({ path, showReason = false }: { path: string; showReason?:
     <div className="flex flex-col gap-2">
       <p className="text-sm text-muted-foreground">{t('common.total', { count: items.length })}</p>
       <Table className="min-w-[40rem]">
-        <thead>
-          <tr>
-            <Th>{t('common.code')}</Th>
-            <Th>{t('common.name')}</Th>
-            <Th>{t('org.path')}</Th>
-            {showReason ? <Th>{t('common.reason')}</Th> : <Th>{t('org.mealUnit')}</Th>}
-          </tr>
-        </thead>
-        <tbody>
+        <TableHeader>
+          <TableRow>
+            <TableHead>{t('common.code')}</TableHead>
+            <TableHead>{t('common.name')}</TableHead>
+            <TableHead>{t('org.path')}</TableHead>
+            {showReason ? (
+              <TableHead>{t('common.reason')}</TableHead>
+            ) : (
+              <TableHead>{t('org.mealUnit')}</TableHead>
+            )}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {items.map((e) => (
-            <tr key={e.employeeCode}>
-              <Td className="font-mono">{e.employeeCode}</Td>
-              <Td>{e.name}</Td>
-              <Td>{e.orgPath}</Td>
-              <Td>{showReason ? reason(e) : (e.mealUnitName ?? t('common.none'))}</Td>
-            </tr>
+            <TableRow key={e.employeeCode}>
+              <TableCell className="font-mono">{e.employeeCode}</TableCell>
+              <TableCell>{e.name}</TableCell>
+              <TableCell>{e.orgPath}</TableCell>
+              <TableCell>{showReason ? reason(e) : (e.mealUnitName ?? t('common.none'))}</TableCell>
+            </TableRow>
           ))}
           {items.length === 0 && !list.isLoading ? (
-            <tr>
-              <Td colSpan={4} className="text-muted-foreground">
+            <TableRow>
+              <TableCell colSpan={4} className="text-muted-foreground">
                 {t('org.emptyList')}
-              </Td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ) : null}
-        </tbody>
+        </TableBody>
       </Table>
     </div>
   );
@@ -532,7 +533,9 @@ function ImportExportTab() {
             {t('common.download')}
           </Button>
         </div>
-        {exportFile.error ? <Alert variant="error">{apiErrorText(exportFile.error)}</Alert> : null}
+        {exportFile.error ? (
+          <Alert variant="destructive">{apiErrorText(exportFile.error)}</Alert>
+        ) : null}
       </section>
       <section className="flex flex-col gap-2">
         <p className="font-medium">{t('org.importTitle')}</p>
@@ -561,34 +564,34 @@ function ImportExportTab() {
             {t('org.upload')}
           </Button>
         </form>
-        {upload.error ? <Alert variant="error">{fileError(upload.error)}</Alert> : null}
-        {apply.error ? <Alert variant="error">{apiErrorText(apply.error)}</Alert> : null}
+        {upload.error ? <Alert variant="destructive">{fileError(upload.error)}</Alert> : null}
+        {apply.error ? <Alert variant="destructive">{apiErrorText(apply.error)}</Alert> : null}
       </section>
 
       {result ? (
         <section className="flex flex-col gap-3 lg:col-span-2">
           {result.status === 'REJECTED' ? (
             <>
-              <Alert variant="error">{t('org.rejected', { count: result.errorCount })}</Alert>
+              <Alert variant="destructive">{t('org.rejected', { count: result.errorCount })}</Alert>
               <Table>
-                <thead>
-                  <tr>
-                    <Th>{t('org.row')}</Th>
-                    <Th>{t('org.field')}</Th>
-                    <Th>{t('org.value')}</Th>
-                    <Th>{t('org.error')}</Th>
-                  </tr>
-                </thead>
-                <tbody>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t('org.row')}</TableHead>
+                    <TableHead>{t('org.field')}</TableHead>
+                    <TableHead>{t('org.value')}</TableHead>
+                    <TableHead>{t('org.error')}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {result.errors.map((e, i) => (
-                    <tr key={i}>
-                      <Td>{e.rowNumber}</Td>
-                      <Td>{vi.org.fields[e.field]}</Td>
-                      <Td className="font-mono">{e.value || t('common.none')}</Td>
-                      <Td>{vi.org.rowErrors[e.code]}</Td>
-                    </tr>
+                    <TableRow key={i}>
+                      <TableCell>{e.rowNumber}</TableCell>
+                      <TableCell>{vi.org.fields[e.field]}</TableCell>
+                      <TableCell className="font-mono">{e.value || t('common.none')}</TableCell>
+                      <TableCell>{vi.org.rowErrors[e.code]}</TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
+                </TableBody>
               </Table>
             </>
           ) : (
@@ -602,24 +605,24 @@ function ImportExportTab() {
               </Alert>
               {result.changes.length > 0 ? (
                 <Table>
-                  <thead>
-                    <tr>
-                      <Th>{t('org.row')}</Th>
-                      <Th>{t('common.code')}</Th>
-                      <Th>{t('common.name')}</Th>
-                      <Th>{t('org.floor')}</Th>
-                      <Th>{t('org.canteen')}</Th>
-                      <Th>{t('org.costCenter')}</Th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{t('org.row')}</TableHead>
+                      <TableHead>{t('common.code')}</TableHead>
+                      <TableHead>{t('common.name')}</TableHead>
+                      <TableHead>{t('org.floor')}</TableHead>
+                      <TableHead>{t('org.canteen')}</TableHead>
+                      <TableHead>{t('org.costCenter')}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {result.changes.map((c) => (
-                      <tr key={c.rowNumber}>
-                        <Td>{c.rowNumber}</Td>
-                        <Td className="font-mono">{c.code}</Td>
-                        <Td>{c.name}</Td>
+                      <TableRow key={c.rowNumber}>
+                        <TableCell>{c.rowNumber}</TableCell>
+                        <TableCell className="font-mono">{c.code}</TableCell>
+                        <TableCell>{c.name}</TableCell>
                         {(['floorCode', 'canteenCode', 'costCenterCode'] as const).map((k) => (
-                          <Td
+                          <TableCell
                             key={k}
                             className={
                               c.before[k] !== c.after[k] ? 'font-medium' : 'text-muted-foreground'
@@ -628,11 +631,11 @@ function ImportExportTab() {
                             {c.before[k] === c.after[k]
                               ? codeOrDash(c.after[k])
                               : `${codeOrDash(c.before[k])} → ${codeOrDash(c.after[k])}`}
-                          </Td>
+                          </TableCell>
                         ))}
-                      </tr>
+                      </TableRow>
                     ))}
-                  </tbody>
+                  </TableBody>
                 </Table>
               ) : null}
               {result.status === 'PREVIEW' && result.changes.length > 0 ? (

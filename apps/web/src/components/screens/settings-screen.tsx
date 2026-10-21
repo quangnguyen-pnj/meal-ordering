@@ -8,12 +8,14 @@ import {
 } from '@meal/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { ResponsiveSelect } from '@/components/responsive-select';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
 import { LoadingRows } from '@/components/ui/skeleton';
 import { TimeInput } from '@/components/ui/time-input';
 import { api } from '@/lib/api';
@@ -101,7 +103,6 @@ export function SettingsScreen() {
   // Only edited keys live here; everything else shows the stored value.
   const [drafts, setDrafts] = useState<Drafts>({});
   const [errors, setErrors] = useState<Partial<Record<SettingKey, string>>>({});
-  const [notice, setNotice] = useState<string | null>(null);
   const byKey = new Map((list.data?.items ?? []).map((s) => [s.key as SettingKey, s]));
 
   const changedKeys = (Object.keys(drafts) as SettingKey[]).filter((k) => {
@@ -141,22 +142,20 @@ export function SettingsScreen() {
         for (const k of saved) delete next[k];
         return next;
       });
-      setNotice(
-        Object.keys(failed).length === 0
-          ? t('settings.savedCount', { count: saved.length })
-          : t('settings.partialSave', {
-              saved: saved.length,
-              failed: Object.keys(failed).length,
-            }),
-      );
+      if (Object.keys(failed).length === 0) {
+        toast.success(t('settings.savedCount', { count: saved.length }));
+      } else {
+        toast.error(
+          t('settings.partialSave', { saved: saved.length, failed: Object.keys(failed).length }),
+        );
+      }
       void qc.invalidateQueries({ queryKey: ['/admin/settings'] });
     },
   });
 
-  if (list.error) return <Alert variant="error">{apiErrorText(list.error)}</Alert>;
+  if (list.error) return <Alert variant="destructive">{apiErrorText(list.error)}</Alert>;
 
   const setValue = (key: SettingKey, value: unknown) => {
-    setNotice(null);
     setDrafts((d) => ({ ...d, [key]: value }));
   };
 
@@ -194,41 +193,37 @@ export function SettingsScreen() {
         </CardContent>
       </Card>
 
-      {changedKeys.length > 0 || notice ? (
+      {changedKeys.length > 0 ? (
         <div
           role="region"
           aria-label={t('settings.saveBar')}
           className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center justify-between gap-3 border-t bg-card px-4 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] md:-mx-6 md:px-6"
         >
           <p className="text-sm" role="status">
-            {changedKeys.length > 0
-              ? invalidKeys.length > 0
-                ? t('settings.invalidCount', { count: invalidKeys.length })
-                : t('settings.changedCount', { count: changedKeys.length })
-              : notice}
+            {invalidKeys.length > 0
+              ? t('settings.invalidCount', { count: invalidKeys.length })
+              : t('settings.changedCount', { count: changedKeys.length })}
           </p>
-          {changedKeys.length > 0 ? (
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                disabled={save.isPending}
-                onClick={() => {
-                  setDrafts({});
-                  setErrors({});
-                }}
-              >
-                {t('settings.discard')}
-              </Button>
-              <Button
-                disabled={save.isPending || invalidKeys.length > 0}
-                onClick={() => save.mutate(changedKeys)}
-              >
-                {save.isPending
-                  ? t('common.saving')
-                  : t('settings.saveAll', { count: changedKeys.length })}
-              </Button>
-            </div>
-          ) : null}
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              disabled={save.isPending}
+              onClick={() => {
+                setDrafts({});
+                setErrors({});
+              }}
+            >
+              {t('settings.discard')}
+            </Button>
+            <Button
+              disabled={save.isPending || invalidKeys.length > 0}
+              onClick={() => save.mutate(changedKeys)}
+            >
+              {save.isPending
+                ? t('common.saving')
+                : t('settings.saveAll', { count: changedKeys.length })}
+            </Button>
+          </div>
         </div>
       ) : null}
 
@@ -294,20 +289,16 @@ function SettingRow({
             />
           ) : editor === 'weekdayTime' ? (
             <>
-              <Select
+              <ResponsiveSelect
                 id={id}
                 className="w-36"
-                value={(value as WeekdayTime).weekday}
-                onChange={(e) =>
-                  onChange({ ...(value as WeekdayTime), weekday: Number(e.target.value) })
-                }
-              >
-                {[1, 2, 3, 4, 5, 6, 7].map((d) => (
-                  <option key={d} value={d}>
-                    {weekdayName(d)}
-                  </option>
-                ))}
-              </Select>
+                value={String((value as WeekdayTime).weekday)}
+                onValueChange={(v) => onChange({ ...(value as WeekdayTime), weekday: Number(v) })}
+                options={[1, 2, 3, 4, 5, 6, 7].map((d) => ({
+                  value: String(d),
+                  label: weekdayName(d),
+                }))}
+              />
               <TimeInput
                 aria-label={`${vi.settings.keys[settingKey]} (${t('settings.time')})`}
                 aria-invalid={!valid || undefined}
@@ -324,13 +315,11 @@ function SettingRow({
             >
               {[1, 2, 3, 4, 5, 6, 7].map((d) => (
                 <label key={d} className="flex min-h-11 items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4"
+                  <Checkbox
                     checked={(value as number[]).includes(d)}
-                    onChange={(e) => {
+                    onCheckedChange={(checked) => {
                       const days = new Set(value as number[]);
-                      if (e.target.checked) days.add(d);
+                      if (checked === true) days.add(d);
                       else days.delete(d);
                       onChange([...days].sort());
                     }}
@@ -362,13 +351,12 @@ function SupplierCard() {
     queryFn: () => api.get<{ id: string; name: string; unitPrice: number }>('/admin/supplier'),
   });
   const [draft, setDraft] = useState<{ name: string; unitPrice: string } | null>(null);
-  const [saved, setSaved] = useState(false);
   const save = useMutation({
     mutationFn: (d: { name: string; unitPrice: string }) =>
       api.put('/admin/supplier', { name: d.name, unitPrice: Number(d.unitPrice) }),
     onSuccess: () => {
       setDraft(null);
-      setSaved(true);
+      toast.success(t('common.saved'));
       void qc.invalidateQueries({ queryKey: ['/admin/supplier'] });
     },
   });
@@ -398,10 +386,7 @@ function SupplierCard() {
                 id="supplier-name"
                 required
                 value={current.name}
-                onChange={(e) => {
-                  setSaved(false);
-                  setDraft({ ...current, name: e.target.value });
-                }}
+                onChange={(e) => setDraft({ ...current, name: e.target.value })}
               />
             </div>
             <div className="flex w-48 flex-col gap-2">
@@ -413,22 +398,16 @@ function SupplierCard() {
                 step={500}
                 required
                 value={current.unitPrice}
-                onChange={(e) => {
-                  setSaved(false);
-                  setDraft({ ...current, unitPrice: e.target.value });
-                }}
+                onChange={(e) => setDraft({ ...current, unitPrice: e.target.value })}
               />
             </div>
             <Button type="submit" disabled={!draft || save.isPending}>
               {save.isPending ? t('common.saving') : t('common.save')}
             </Button>
-            <span className="min-h-11 py-3 text-sm text-muted-foreground" role="status">
-              {saved ? t('common.saved') : ''}
-            </span>
           </form>
         ) : null}
         {(save.error ?? supplier.error) ? (
-          <Alert variant="error" className="mt-3">
+          <Alert variant="destructive" className="mt-3">
             {apiErrorText(save.error ?? supplier.error)}
           </Alert>
         ) : null}

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PinInput } from '@/components/ui/pin-input';
+import { Separator } from '@/components/ui/separator';
 import { ApiError, api } from '@/lib/api';
 import { formatVnTime, safeNextPath } from '@/lib/utils';
 import { errorMessage, t } from '@/messages';
@@ -50,7 +51,7 @@ export function LoginForm() {
 
   return (
     <div className="flex flex-col gap-5">
-      {ssoFailed ? <Alert variant="error">{t('login.ssoFailed')}</Alert> : null}
+      {ssoFailed ? <Alert variant="destructive">{t('login.ssoFailed')}</Alert> : null}
 
       <div className="flex flex-col gap-1.5">
         <Button asChild variant="outline" className="w-full">
@@ -61,9 +62,9 @@ export function LoginForm() {
       </div>
 
       <div className="flex items-center gap-3 text-xs text-muted-foreground" aria-hidden>
-        <span className="h-px flex-1 bg-border" />
-        {t('login.or')}
-        <span className="h-px flex-1 bg-border" />
+        <Separator className="flex-1" />
+        <span className="shrink-0">{t('login.or')}</span>
+        <Separator className="flex-1" />
       </div>
 
       <form
@@ -104,7 +105,7 @@ export function LoginForm() {
         </div>
 
         {login.isError ? (
-          <Alert variant="error" role="alert">
+          <Alert variant="destructive" role="alert">
             {loginErrorText(login.error)}
           </Alert>
         ) : null}

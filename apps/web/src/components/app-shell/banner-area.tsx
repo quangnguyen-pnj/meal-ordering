@@ -18,6 +18,8 @@ export interface Banner {
   action?: { href: string; label: string };
 }
 
+const VARIANT = { info: 'default', warning: 'warning', error: 'destructive' } as const;
+
 /**
  * Top-of-page warnings shared by every screen (plan section 4): menu not published (BR-06) and
  * in-app notices (BR-14); attendance sync and finalization warnings join in P3 and P4.
@@ -40,7 +42,7 @@ export function BannerArea({ banners }: { banners: readonly Banner[] }) {
       {visible.map((b) => (
         <Alert
           key={b.id}
-          variant={b.severity}
+          variant={VARIANT[b.severity]}
           role={b.severity === 'error' ? 'alert' : 'status'}
           className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
         >

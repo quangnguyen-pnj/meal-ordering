@@ -48,7 +48,7 @@ export function WeekMenuScreen() {
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        {menu.error ? <Alert variant="error">{apiErrorText(menu.error)}</Alert> : null}
+        {menu.error ? <Alert variant="destructive">{apiErrorText(menu.error)}</Alert> : null}
         {data?.state === 'UNASSIGNED' ? (
           <Alert variant="warning">{t('week.unassigned')}</Alert>
         ) : null}
