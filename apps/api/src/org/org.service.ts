@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import {
+  resolveMealUnitId,
   resolveMealUnitMapping,
   resolveNodeMapping,
   type EmployeeMappingView,
@@ -73,6 +74,7 @@ export class OrgService {
           canteen: view(r.canteen),
           costCenter: view(r.costCenter),
         },
+        mealUnitId: resolveMealUnitId(n.id, org.index),
         mealUnitValid: n.isMealUnit ? resolveMealUnitMapping(n.id, org.index).valid : null,
         directHeadcount: headcount.get(n.id) ?? 0,
         deptAdmins: admins
