@@ -2,14 +2,24 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { toast } from 'sonner';
+import { EmployeePicker, type PickedEmployee } from '@/components/employee-picker';
+import { ResponsiveSelect } from '@/components/responsive-select';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { useConfirm } from '@/components/confirm-dialog';
 import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
-import { Table, Td, Th } from '@/components/ui/table';
+import { LoadingRows } from '@/components/ui/skeleton';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { api } from '@/lib/api';
 import { apiErrorText } from '@/lib/errors';
 import { formatVnDateTime } from '@/lib/utils';
@@ -37,7 +47,8 @@ interface SyncRunRow {
 /** /system: HC and system admin roles (system admins only) and the sync log. */
 export function SystemScreen() {
   const qc = useQueryClient();
-  const [code, setCode] = useState('');
+  const [pick, setPick] = useState<PickedEmployee | null>(null);
+  const [confirm, confirmElement] = useConfirm();
   const [role, setRole] = useState<PrivilegedRole>('HC_ADMIN');
   const roles = useQuery({
     queryKey: ['/system/roles'],
@@ -48,15 +59,19 @@ export function SystemScreen() {
     queryFn: () => api.get<{ items: SyncRunRow[] }>('/system/sync-runs'),
   });
   const assign = useMutation({
-    mutationFn: () => api.post('/system/roles', { employeeCode: code.trim(), role }),
+    mutationFn: (employeeCode: string) => api.post('/system/roles', { employeeCode, role }),
     onSuccess: () => {
-      setCode('');
+      toast.success(t('system.assigned', { name: pick?.name ?? '', role: vi.roles[role] }));
+      setPick(null);
       void qc.invalidateQueries({ queryKey: ['/system/roles'] });
     },
   });
   const revoke = useMutation({
     mutationFn: (id: string) => api.post(`/system/roles/${id}/revoke`),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['/system/roles'] }),
+    onSuccess: () => {
+      toast.success(t('system.revoked'));
+      void qc.invalidateQueries({ queryKey: ['/system/roles'] });
+    },
   });
   const error = roles.error ?? assign.error ?? revoke.error;
 
@@ -71,62 +86,75 @@ export function SystemScreen() {
             className="flex flex-wrap items-end gap-3"
             onSubmit={(e) => {
               e.preventDefault();
-              if (code.trim()) assign.mutate();
+              if (pick) assign.mutate(pick.employeeCode);
             }}
           >
-            <div className="flex w-56 flex-col gap-2">
-              <Label htmlFor="role-code">{t('org.employeeCode')}</Label>
-              <Input id="role-code" value={code} onChange={(e) => setCode(e.target.value)} />
+            <div className="flex w-full flex-col gap-2 sm:w-80">
+              <Label htmlFor="role-code">{t('employeePicker.label')}</Label>
+              <EmployeePicker id="role-code" value={pick} onChange={setPick} />
             </div>
-            <div className="flex w-56 flex-col gap-2">
+            <div className="flex w-full flex-col gap-2 sm:w-56">
               <Label htmlFor="role-role">{t('system.role')}</Label>
-              <Select
+              <ResponsiveSelect
                 id="role-role"
                 value={role}
-                onChange={(e) => setRole(e.target.value as PrivilegedRole)}
-              >
-                <option value="HC_ADMIN">{vi.roles.HC_ADMIN}</option>
-                <option value="SYS_ADMIN">{vi.roles.SYS_ADMIN}</option>
-              </Select>
+                onValueChange={(v) => setRole(v as PrivilegedRole)}
+                options={[
+                  { value: 'HC_ADMIN', label: vi.roles.HC_ADMIN },
+                  { value: 'SYS_ADMIN', label: vi.roles.SYS_ADMIN },
+                ]}
+              />
             </div>
-            <Button type="submit" disabled={!code.trim() || assign.isPending}>
+            <Button type="submit" disabled={!pick || assign.isPending}>
               {t('system.assign')}
             </Button>
           </form>
-          {error ? <Alert variant="error">{apiErrorText(error)}</Alert> : null}
-          <Table>
-            <thead>
-              <tr>
-                <Th>{t('common.code')}</Th>
-                <Th>{t('common.name')}</Th>
-                <Th>{t('system.role')}</Th>
-                <Th>{t('system.since')}</Th>
-                <Th className="text-right">{t('common.actions')}</Th>
-              </tr>
-            </thead>
-            <tbody>
+          {error ? <Alert variant="destructive">{apiErrorText(error)}</Alert> : null}
+          {confirmElement}
+          {roles.isLoading ? <LoadingRows rows={2} /> : null}
+          <Table
+            containerClassName={roles.isLoading ? 'hidden' : undefined}
+            className="min-w-[36rem]"
+          >
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t('common.code')}</TableHead>
+                <TableHead>{t('common.name')}</TableHead>
+                <TableHead>{t('system.role')}</TableHead>
+                <TableHead>{t('system.since')}</TableHead>
+                <TableHead className="text-right">{t('common.actions')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {(roles.data?.items ?? []).map((r) => (
-                <tr key={r.id}>
-                  <Td className="font-mono">{r.employeeCode}</Td>
-                  <Td>{r.name}</Td>
-                  <Td>{vi.roles[r.role]}</Td>
-                  <Td>{formatVnDateTime(r.createdAt)}</Td>
-                  <Td className="text-right">
+                <TableRow key={r.id}>
+                  <TableCell className="font-mono">{r.employeeCode}</TableCell>
+                  <TableCell>{r.name}</TableCell>
+                  <TableCell>{vi.roles[r.role]}</TableCell>
+                  <TableCell>{formatVnDateTime(r.createdAt)}</TableCell>
+                  <TableCell className="text-right">
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() =>
-                        window.confirm(
-                          t('system.revokeConfirm', { role: vi.roles[r.role], name: r.name }),
-                        ) && revoke.mutate(r.id)
-                      }
+                      onClick={async () => {
+                        const ok = await confirm({
+                          title: t('system.revokeTitle'),
+                          description: t('system.revokeConfirm', {
+                            role: vi.roles[r.role],
+                            name: r.name,
+                          }),
+                          confirmLabel: t('system.revoke'),
+                          destructive: true,
+                        });
+                        if (ok) revoke.mutate(r.id);
+                      }}
                     >
                       {t('system.revoke')}
                     </Button>
-                  </Td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
+            </TableBody>
           </Table>
         </CardContent>
       </Card>
@@ -135,42 +163,53 @@ export function SystemScreen() {
           <CardTitle className="text-lg">{t('system.syncTitle')}</CardTitle>
         </CardHeader>
         <CardContent>
-          {runs.error ? <Alert variant="error">{apiErrorText(runs.error)}</Alert> : null}
-          <Table>
-            <thead>
-              <tr>
-                <Th>{t('system.started')}</Th>
-                <Th>{t('dishes.type')}</Th>
-                <Th />
-                <Th>{t('system.records')}</Th>
-                <Th>{t('system.error')}</Th>
-              </tr>
-            </thead>
-            <tbody>
+          {runs.error ? <Alert variant="destructive">{apiErrorText(runs.error)}</Alert> : null}
+          {runs.isLoading ? <LoadingRows rows={3} /> : null}
+          <Table
+            containerClassName={runs.isLoading ? 'hidden' : undefined}
+            className="min-w-[36rem]"
+          >
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t('system.started')}</TableHead>
+                <TableHead>{t('dishes.type')}</TableHead>
+                <TableHead>{t('common.status')}</TableHead>
+                <TableHead>{t('system.records')}</TableHead>
+                <TableHead>{t('system.error')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {(runs.data?.items ?? []).map((r) => (
-                <tr key={r.id}>
-                  <Td>{formatVnDateTime(r.startedAt)}</Td>
-                  <Td>{vi.system.syncType[r.type]}</Td>
-                  <Td>
+                <TableRow key={r.id}>
+                  <TableCell>{formatVnDateTime(r.startedAt)}</TableCell>
+                  <TableCell>{vi.system.syncType[r.type]}</TableCell>
+                  <TableCell>
                     <Badge
                       variant={
                         r.status === 'SUCCESS'
                           ? 'success'
                           : r.status === 'FAILED'
-                            ? 'error'
+                            ? 'destructive'
                             : 'outline'
                       }
                     >
                       {vi.system.syncStatus[r.status]}
                     </Badge>
-                  </Td>
-                  <Td>{r.recordCount ?? t('common.none')}</Td>
-                  <Td className="max-w-md truncate text-xs" title={r.error ?? undefined}>
+                  </TableCell>
+                  <TableCell>{r.recordCount ?? t('common.none')}</TableCell>
+                  <TableCell className="max-w-md truncate text-xs" title={r.error ?? undefined}>
                     {r.error ?? ''}
-                  </Td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
+              {runs.data && runs.data.items.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-muted-foreground">
+                    {t('system.noSyncRuns')}
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
           </Table>
         </CardContent>
       </Card>

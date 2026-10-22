@@ -1,4 +1,5 @@
 import type { Config } from 'tailwindcss';
+import animate from 'tailwindcss-animate';
 
 const config: Config = {
   content: ['./src/**/*.{ts,tsx}'],
@@ -23,6 +24,22 @@ const config: Config = {
         },
         warning: { DEFAULT: 'hsl(var(--warning))', foreground: 'hsl(var(--warning-foreground))' },
         card: { DEFAULT: 'hsl(var(--card))', foreground: 'hsl(var(--card-foreground))' },
+        canvas: 'hsl(var(--canvas))',
+        popover: {
+          DEFAULT: 'hsl(var(--popover))',
+          foreground: 'hsl(var(--popover-foreground))',
+        },
+      },
+      // Blocks are set apart by soft shadows rather than borders. The faint 1px ring keeps a
+      // white block visible on a white card; "raised" is for floating layers (menus, popovers).
+      boxShadow: {
+        // Not "card": that is also a colour, and shadow-card would set the shadow colour to white.
+        block:
+          '0 0 0 1px rgb(41 37 36 / 0.06), 0 1px 2px rgb(41 37 36 / 0.06), 0 4px 12px -4px rgb(41 37 36 / 0.10)',
+        raised:
+          '0 0 0 1px rgb(41 37 36 / 0.05), 0 4px 12px -2px rgb(41 37 36 / 0.10), 0 2px 4px -2px rgb(41 37 36 / 0.06)',
+        overlay:
+          '0 0 0 1px rgb(41 37 36 / 0.05), 0 16px 40px -8px rgb(41 37 36 / 0.20), 0 4px 12px -4px rgb(41 37 36 / 0.10)',
       },
       borderRadius: {
         lg: 'var(--radius)',
@@ -31,7 +48,7 @@ const config: Config = {
       },
     },
   },
-  plugins: [],
+  plugins: [animate],
 };
 
 export default config;

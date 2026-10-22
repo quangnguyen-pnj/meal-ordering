@@ -7,15 +7,20 @@ import {
   type WeekdayTime,
 } from '@meal/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { ResponsiveSelect } from '@/components/responsive-select';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
+import { LoadingRows } from '@/components/ui/skeleton';
+import { TimeInput } from '@/components/ui/time-input';
 import { api } from '@/lib/api';
 import { apiErrorText } from '@/lib/errors';
+import { cn } from '@/lib/utils';
 import { t, vi } from '@/messages';
 
 type Editor = 'weekdayTime' | 'time' | 'number' | 'days';
@@ -84,14 +89,75 @@ export function describeSetting(key: SettingKey, value: unknown): string {
   }
 }
 
+type Drafts = Partial<Record<SettingKey, unknown>>;
+
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
 /** /admin/settings: plan 6.4 keys plus the caterer and unit price (plan section 3). */
 export function SettingsScreen() {
+  const qc = useQueryClient();
   const list = useQuery({
     queryKey: ['/admin/settings'],
     queryFn: () => api.get<{ items: SettingView[] }>('/admin/settings'),
   });
-  if (list.error) return <Alert variant="error">{apiErrorText(list.error)}</Alert>;
+  // Only edited keys live here; everything else shows the stored value.
+  const [drafts, setDrafts] = useState<Drafts>({});
+  const [errors, setErrors] = useState<Partial<Record<SettingKey, string>>>({});
   const byKey = new Map((list.data?.items ?? []).map((s) => [s.key as SettingKey, s]));
+
+  const changedKeys = (Object.keys(drafts) as SettingKey[]).filter((k) => {
+    const stored = byKey.get(k);
+    return stored !== undefined && !same(drafts[k], stored.value);
+  });
+  const invalidKeys = changedKeys.filter(
+    (k) => !SETTING_DEFINITIONS[k].schema.safeParse(drafts[k]).success,
+  );
+
+  useEffect(() => {
+    if (changedKeys.length === 0) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [changedKeys.length]);
+
+  // One PUT per changed key: each is validated and audited on its own by the API.
+  const save = useMutation({
+    mutationFn: async (keys: SettingKey[]) => {
+      const failed: Partial<Record<SettingKey, string>> = {};
+      const saved: SettingKey[] = [];
+      for (const key of keys) {
+        try {
+          await api.put<SettingView>(`/admin/settings/${key}`, { value: drafts[key] });
+          saved.push(key);
+        } catch (error) {
+          failed[key] = apiErrorText(error);
+        }
+      }
+      return { saved, failed };
+    },
+    onSuccess: ({ saved, failed }) => {
+      setErrors(failed);
+      setDrafts((d) => {
+        const next = { ...d };
+        for (const k of saved) delete next[k];
+        return next;
+      });
+      if (Object.keys(failed).length === 0) {
+        toast.success(t('settings.savedCount', { count: saved.length }));
+      } else {
+        toast.error(
+          t('settings.partialSave', { saved: saved.length, failed: Object.keys(failed).length }),
+        );
+      }
+      void qc.invalidateQueries({ queryKey: ['/admin/settings'] });
+    },
+  });
+
+  if (list.error) return <Alert variant="destructive">{apiErrorText(list.error)}</Alert>;
+
+  const setValue = (key: SettingKey, value: unknown) => {
+    setDrafts((d) => ({ ...d, [key]: value }));
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -101,6 +167,7 @@ export function SettingsScreen() {
           <CardDescription>{t('settings.intro')}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
+          {list.isLoading ? <LoadingRows rows={6} /> : null}
           {GROUPS.map((group) => (
             <section key={group.key} className="flex flex-col gap-3">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
@@ -108,119 +175,172 @@ export function SettingsScreen() {
               </h2>
               {group.keys.map((key) => {
                 const setting = byKey.get(key);
-                return setting ? <SettingRow key={key} settingKey={key} setting={setting} /> : null;
+                if (!setting) return null;
+                const value = key in drafts ? drafts[key] : setting.value;
+                return (
+                  <SettingRow
+                    key={key}
+                    settingKey={key}
+                    setting={setting}
+                    value={value}
+                    error={errors[key]}
+                    onChange={(v) => setValue(key, v)}
+                  />
+                );
               })}
             </section>
           ))}
         </CardContent>
       </Card>
+
+      {changedKeys.length > 0 ? (
+        <div
+          role="region"
+          aria-label={t('settings.saveBar')}
+          className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center justify-between gap-3 bg-card px-4 py-3 shadow-[0_-6px_16px_-6px_rgb(41_37_36/0.12)] md:-mx-8 md:px-8"
+        >
+          <p className="text-sm" role="status">
+            {invalidKeys.length > 0
+              ? t('settings.invalidCount', { count: invalidKeys.length })
+              : t('settings.changedCount', { count: changedKeys.length })}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              disabled={save.isPending}
+              onClick={() => {
+                setDrafts({});
+                setErrors({});
+              }}
+            >
+              {t('settings.discard')}
+            </Button>
+            <Button
+              disabled={save.isPending || invalidKeys.length > 0}
+              onClick={() => save.mutate(changedKeys)}
+            >
+              {save.isPending
+                ? t('common.saving')
+                : t('settings.saveAll', { count: changedKeys.length })}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       <SupplierCard />
     </div>
   );
 }
 
-function SettingRow({ settingKey, setting }: { settingKey: SettingKey; setting: SettingView }) {
-  const qc = useQueryClient();
-  const [value, setValue] = useState<unknown>(setting.value);
-  const [saved, setSaved] = useState(false);
+function SettingRow({
+  settingKey,
+  setting,
+  value,
+  error,
+  onChange,
+}: {
+  settingKey: SettingKey;
+  setting: SettingView;
+  value: unknown;
+  error?: string;
+  onChange: (value: unknown) => void;
+}) {
   const editor = EDITOR[settingKey];
   const valid = SETTING_DEFINITIONS[settingKey].schema.safeParse(value).success;
-  const changed = JSON.stringify(value) !== JSON.stringify(setting.value);
-
-  const save = useMutation({
-    mutationFn: () => api.put<SettingView>(`/admin/settings/${settingKey}`, { value }),
-    onSuccess: () => {
-      setSaved(true);
-      void qc.invalidateQueries({ queryKey: ['/admin/settings'] });
-    },
-  });
+  const changed = !same(value, setting.value);
+  const isDefault = same(value, setting.defaultValue);
   const id = `setting-${settingKey}`;
 
   return (
-    <form
-      className="grid items-end gap-3 rounded-md border p-3 md:grid-cols-[1fr_auto_auto]"
-      onSubmit={(e) => {
-        e.preventDefault();
-        setSaved(false);
-        save.mutate();
-      }}
+    <div
+      className={cn(
+        'flex flex-col gap-3 rounded-lg bg-card p-4 shadow-block transition-[box-shadow,background-color] md:flex-row md:items-start md:justify-between md:gap-6',
+        changed && 'bg-primary/5 ring-1 ring-primary/40',
+      )}
     >
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1 md:w-1/2">
         <Label htmlFor={id}>{vi.settings.keys[settingKey]}</Label>
-        {editor === 'number' ? (
-          <Input
-            id={id}
-            type="number"
-            className="max-w-40"
-            value={String(value)}
-            onChange={(e) => setValue(e.target.value === '' ? '' : Number(e.target.value))}
-          />
-        ) : editor === 'time' ? (
-          <Input
-            id={id}
-            type="time"
-            className="max-w-40"
-            value={String(value)}
-            onChange={(e) => setValue(e.target.value)}
-          />
-        ) : editor === 'weekdayTime' ? (
-          <div className="flex gap-2">
-            <Select
-              id={id}
-              className="max-w-40"
-              value={(value as WeekdayTime).weekday}
-              onChange={(e) =>
-                setValue({ ...(value as WeekdayTime), weekday: Number(e.target.value) })
-              }
-            >
-              {[1, 2, 3, 4, 5, 6, 7].map((d) => (
-                <option key={d} value={d}>
-                  {weekdayName(d)}
-                </option>
-              ))}
-            </Select>
-            <Input
-              type="time"
-              aria-label={vi.settings.keys[settingKey]}
-              className="max-w-36"
-              value={(value as WeekdayTime).time}
-              onChange={(e) => setValue({ ...(value as WeekdayTime), time: e.target.value })}
-            />
-          </div>
-        ) : (
-          <div id={id} className="flex flex-wrap gap-3">
-            {[1, 2, 3, 4, 5, 6, 7].map((d) => (
-              <label key={d} className="flex min-h-11 items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={(value as number[]).includes(d)}
-                  onChange={(e) => {
-                    const days = new Set(value as number[]);
-                    if (e.target.checked) days.add(d);
-                    else days.delete(d);
-                    setValue([...days].sort());
-                  }}
-                />
-                {weekdayName(d)}
-              </label>
-            ))}
-          </div>
-        )}
         <p className="text-xs text-muted-foreground">
           {t('settings.default', { value: describeSetting(settingKey, setting.defaultValue) })}
+          {changed ? (
+            <span className="ml-2 font-medium text-primary">
+              {t('settings.was', { value: describeSetting(settingKey, setting.value) })}
+            </span>
+          ) : null}
         </p>
-        {save.error ? <p className="text-sm text-destructive">{apiErrorText(save.error)}</p> : null}
+      </div>
+      <div className="flex flex-col gap-2 md:items-end">
+        <div className="flex flex-wrap items-center gap-2">
+          {editor === 'number' ? (
+            <Input
+              id={id}
+              type="number"
+              className="w-28"
+              aria-invalid={!valid || undefined}
+              value={String(value)}
+              onChange={(e) => onChange(e.target.value === '' ? '' : Number(e.target.value))}
+            />
+          ) : editor === 'time' ? (
+            <TimeInput
+              id={id}
+              aria-invalid={!valid || undefined}
+              value={String(value)}
+              onChange={onChange}
+            />
+          ) : editor === 'weekdayTime' ? (
+            <>
+              <ResponsiveSelect
+                id={id}
+                className="w-36"
+                value={String((value as WeekdayTime).weekday)}
+                onValueChange={(v) => onChange({ ...(value as WeekdayTime), weekday: Number(v) })}
+                options={[1, 2, 3, 4, 5, 6, 7].map((d) => ({
+                  value: String(d),
+                  label: weekdayName(d),
+                }))}
+              />
+              <TimeInput
+                aria-label={`${vi.settings.keys[settingKey]} (${t('settings.time')})`}
+                aria-invalid={!valid || undefined}
+                value={(value as WeekdayTime).time}
+                onChange={(time) => onChange({ ...(value as WeekdayTime), time })}
+              />
+            </>
+          ) : (
+            <div
+              id={id}
+              role="group"
+              aria-label={vi.settings.keys[settingKey]}
+              className="flex flex-wrap gap-x-3"
+            >
+              {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+                <label key={d} className="flex min-h-11 items-center gap-2 text-sm">
+                  <Checkbox
+                    checked={(value as number[]).includes(d)}
+                    onCheckedChange={(checked) => {
+                      const days = new Set(value as number[]);
+                      if (checked === true) days.add(d);
+                      else days.delete(d);
+                      onChange([...days].sort());
+                    }}
+                  />
+                  {weekdayName(d)}
+                </label>
+              ))}
+            </div>
+          )}
+          {!isDefault ? (
+            <Button variant="ghost" size="sm" onClick={() => onChange(setting.defaultValue)}>
+              {t('settings.useDefault')}
+            </Button>
+          ) : null}
+        </div>
         {!valid ? (
           <p className="text-sm text-destructive">{t('errors.VALIDATION_FAILED')}</p>
         ) : null}
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
       </div>
-      <Button type="submit" disabled={!changed || !valid || save.isPending}>
-        {save.isPending ? t('common.saving') : t('common.save')}
-      </Button>
-      <span className="min-w-16 text-sm text-muted-foreground" role="status">
-        {saved && !changed ? t('common.saved') : ''}
-      </span>
-    </form>
+    </div>
   );
 }
 
@@ -236,6 +356,7 @@ function SupplierCard() {
       api.put('/admin/supplier', { name: d.name, unitPrice: Number(d.unitPrice) }),
     onSuccess: () => {
       setDraft(null);
+      toast.success(t('common.saved'));
       void qc.invalidateQueries({ queryKey: ['/admin/supplier'] });
     },
   });
@@ -286,7 +407,7 @@ function SupplierCard() {
           </form>
         ) : null}
         {(save.error ?? supplier.error) ? (
-          <Alert variant="error" className="mt-3">
+          <Alert variant="destructive" className="mt-3">
             {apiErrorText(save.error ?? supplier.error)}
           </Alert>
         ) : null}

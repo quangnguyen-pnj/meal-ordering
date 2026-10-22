@@ -118,3 +118,33 @@ Choices made while building, where the plan (`docs/plan.md`, MVP Plan v1.1) was 
 ### Tooling
 
 - **Tests on Linux without the embedded PostgreSQL's ICU 60:** set `TEST_DATABASE_URL` to an empty disposable database (the existing escape hatch). Test files clean up what they create, except `ForecastLine` rows, which are write-once by design.
+
+## P1 UI review (between P1 and P2)
+
+A UI/UX pass over every P1 screen, asked for after a review. No business rule changed; the only API change is that a removed-dish notice now carries `lockTime`.
+
+- **Navigation:** screens that are still placeholders stay in the menu, greyed out with a "Sắp có" badge, and are not links (`NavItem.available`). Flip `available` when a phase delivers a screen. `/` still lands on `/today` (P2); its placeholder links to `/week` meanwhile.
+- **Loading:** `app/(app)/loading.tsx` shows a skeleton while a screen renders, and the clicked menu item shows a spinner (`useLinkStatus`, Next 15.3+). Lists show skeleton rows instead of "Đang tải…".
+- **Phones and desktops are both targets** (office staff and guards use phones; production workers have no phone at work and no company email, no kiosk). On phones the header is one row and the account block moved into the menu; the employee list turns into cards; tables scroll sideways instead of squeezing columns.
+- **Dialogs instead of `window.confirm` and top-of-page forms** (`components/ui/dialog.tsx`, `useConfirm`). The one-time temporary PIN opens in a dialog that has to be acknowledged, so it can never appear off-screen.
+- **Settings save together:** edits are drafts until "Lưu thay đổi (n)" in a sticky bar. Each changed key is still its own `PUT` (validated and audited per key); a partial failure keeps the failed drafts and shows the error on that row. Times are typed as 24-hour `HH:mm` text, because a native time input follows the browser locale (12-hour on English systems).
+- **Org panel keeps auto-saving** (one audited `PATCH` per change, as before) but says what it saved and offers "Hoàn tác", which sends the previous value as another audited change.
+- **Granting roles uses an employee search** (`EmployeePicker`, `/employees?q=`), so the admin sees the name before granting; it searches within the admin's own scope.
+- **Menu builder:** each day has "Thêm món", which opens a picker; this replaces "select a day, then Thêm in the library". Dragging from the library stays on wide screens. The unusual-mix note (BR-13) only shows once a day has dishes. Publishing is confirmed in a dialog that repeats the deadline.
+- **Login:** Microsoft stays on top (staff with a company email); code + PIN below for workers. PIN fields have a show/hide toggle. Employee codes are not upper-cased on the client while Q4 is open.
+- **Rule 3 fix:** the "dish removed" notice said "trước 08:00"; it now uses `lockTime` from the notice payload (the `day.lockTime` setting when the menu was edited). Older notices without it say "trước giờ khóa".
+
+### shadcn/ui throughout
+
+- **Every UI primitive is shadcn/ui** (`apps/web/components.json`, style new-york, Tailwind 3 with `tailwindcss-animate`): Button, Input, Label, Card, Badge, Alert, Table, Tabs, Checkbox, Dialog, AlertDialog, Sheet, Select, Popover, Command, DropdownMenu, Tooltip, Separator, Skeleton and Sonner. Add new ones with `pnpm dlx shadcn@latest add <name>` from `apps/web`. Local changes to the generated files: 44 px touch sizes, `warning`/`success` variants on Alert and Badge, `CardTitle` is the page `<h1>`.
+- **Selects follow the device** (`ResponsiveSelect`): a native `<select>` styled like the trigger when the primary pointer is a finger (`(pointer: coarse)`, phones and tablets), so the OS picker opens; the Radix Select with a mouse. Radix reserves `""`, so "Tất cả" / "Kế thừa" travel as a sentinel inside the component.
+- **Dialogs return focus to their opener.** Radix only does that for a `Dialog.Trigger`; ours open from code (row menus, handlers), so `AppDialog` and `useConfirm` remember the opener when they open. Confirmations use AlertDialog (Cancel has the first focus, a click outside does nothing); the one-time PIN is an AlertDialog too.
+- **Success messages are toasts** (Sonner), with "Hoàn tác" where a change can be reversed (org mapping, archiving a dish). Errors stay inline next to what failed.
+- **Kept outside shadcn:** the org tree (no tree primitive), the menu builder's drag-and-drop (dnd-kit), the 24-hour time and PIN fields (built on Input).
+
+### Menu builder drag and drop, and the block style
+
+- **Dragging uses a `DragOverlay`** rendered on `document.body`. The library scrolls (`overflow-y: auto`), so a dish moved by a transform inside it was clipped as soon as it left the library. The entry stays in place, dimmed, and the moving copy says what the drop will do ("Thêm vào Thứ Ba" / "Đổi món …").
+- **Dropping a dish on a dish replaces it** (BR-14 once published); dropping it anywhere else on the day adds it; a dessert always joins the day. With a pointer the dish under the cursor wins over its day (`pointerWithin`); keyboard drags use the nearest target. `resolveDrop` holds the rule and is unit-tested.
+- **Below 1024 px (`lg`)** the library is hidden, so each day shows "+ Thêm món" and each published dish its "Đổi thành" select. From 1024 px up both are hidden and drag and drop is the only way (by choice of the administration).
+- **Blocks are set apart by shadows, not borders**, on a faint warm page background (`--canvas`). Tokens in `tailwind.config.ts`: `shadow-block` (cards, panels, rows), `shadow-raised` (menus, popovers, select lists), `shadow-overlay` (dialogs, sheets, the drag copy). Not `shadow-card`: `card` is also a colour, and Tailwind would then generate a white shadow colour for the same class. Inputs keep their borders; tables keep light row dividers. Inner padding went from 12 to 16 px and page padding to 32 px on desktop.

@@ -9,6 +9,8 @@ import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PinInput } from '@/components/ui/pin-input';
+import { Separator } from '@/components/ui/separator';
 import { ApiError, api } from '@/lib/api';
 import { formatVnTime, safeNextPath } from '@/lib/utils';
 import { errorMessage, t } from '@/messages';
@@ -49,17 +51,20 @@ export function LoginForm() {
 
   return (
     <div className="flex flex-col gap-5">
-      {ssoFailed ? <Alert variant="error">{t('login.ssoFailed')}</Alert> : null}
+      {ssoFailed ? <Alert variant="destructive">{t('login.ssoFailed')}</Alert> : null}
 
-      <Button asChild variant="outline" className="w-full">
-        {/* Full navigation, not client routing: the API answers with a redirect to Microsoft. */}
-        <a href="/api/auth/entra/login">{t('login.microsoft')}</a>
-      </Button>
+      <div className="flex flex-col gap-1.5">
+        <Button asChild variant="outline" className="w-full">
+          {/* Full navigation, not client routing: the API answers with a redirect to Microsoft. */}
+          <a href="/api/auth/entra/login">{t('login.microsoft')}</a>
+        </Button>
+        <p className="text-center text-xs text-muted-foreground">{t('login.microsoftHint')}</p>
+      </div>
 
       <div className="flex items-center gap-3 text-xs text-muted-foreground" aria-hidden>
-        <span className="h-px flex-1 bg-border" />
-        {t('login.or')}
-        <span className="h-px flex-1 bg-border" />
+        <Separator className="flex-1" />
+        <span className="shrink-0">{t('login.or')}</span>
+        <Separator className="flex-1" />
       </div>
 
       <form
@@ -86,12 +91,9 @@ export function LoginForm() {
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="pin">{t('login.pin')}</Label>
-          <Input
+          <PinInput
             id="pin"
-            type="password"
-            inputMode="numeric"
             autoComplete="current-password"
-            maxLength={6}
             aria-invalid={pinError ? true : undefined}
             {...form.register('pin')}
           />
@@ -103,7 +105,7 @@ export function LoginForm() {
         </div>
 
         {login.isError ? (
-          <Alert variant="error" role="alert">
+          <Alert variant="destructive" role="alert">
             {loginErrorText(login.error)}
           </Alert>
         ) : null}

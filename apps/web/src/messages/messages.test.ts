@@ -16,8 +16,8 @@ describe('Vietnamese messages', () => {
   });
 
   it('fills placeholders and leaves unknown ones visible', () => {
-    expect(t('placeholder.body', { phase: 'P2' })).toBe('Màn hình này sẽ có ở giai đoạn P2.');
-    expect(t('placeholder.body')).toContain('{phase}');
+    expect(t('nav.comingSoonHint', { phase: 'P2' })).toBe('Màn hình này sẽ có ở giai đoạn P2.');
+    expect(t('nav.comingSoonHint')).toContain('{phase}');
   });
 
   it('is written in Vietnamese with diacritics', () => {
