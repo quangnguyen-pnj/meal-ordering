@@ -325,7 +325,7 @@ export class MenuService {
           for (const r of plan.plan.remove) {
             await tx.menuItem.update({ where: { id: r.id }, data: { removedAt: now } });
             // BR-14: registrations need reselection; still unselected at the lock, they are
-            // cancelled. TODO(BR-14): the lock-time cancellation runs with registration (P2).
+            // cancelled by ForecastService.cancelUnselectedAtLock (reselect-deadline job).
             const regs = await tx.registration.findMany({
               where: { menuItemId: r.id, status: 'ACTIVE' },
               select: { employeeId: true },

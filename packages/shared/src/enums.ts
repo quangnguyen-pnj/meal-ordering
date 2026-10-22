@@ -62,6 +62,8 @@ export const API_ERROR_CODES = [
   'IN_USE',
   /** The resource is in a state that does not allow this action (e.g. already published). */
   'INVALID_STATE',
+  /** BR-24: the day has locked (day.lockTime) for this kind of change. */
+  'DAY_LOCKED',
   /** A DMP call failed; nothing was written. */
   'DMP_UNAVAILABLE',
   'INTERNAL',

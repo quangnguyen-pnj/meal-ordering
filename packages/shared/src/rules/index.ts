@@ -3,6 +3,7 @@ export * from './deadlines';
 export * from './mapping';
 export * from './mapping-import';
 export * from './menu';
+export * from './registration';
 export * from './org-sync';
 export * from './permissions';
 export * from './pin';
