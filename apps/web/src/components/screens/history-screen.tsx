@@ -7,7 +7,15 @@ import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, Td, Th } from '@/components/ui/table';
+import { LoadingRows } from '@/components/ui/skeleton';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { api } from '@/lib/api';
 import { apiErrorText } from '@/lib/errors';
 import { formatDate } from '@/lib/utils';
@@ -17,7 +25,7 @@ import { weekdayName } from './day-meals';
 const STATUS_VARIANT = {
   REGISTERED: 'success',
   NOT_REGISTERED: 'outline',
-  CANCELLED: 'error',
+  CANCELLED: 'destructive',
 } as const;
 
 /** /history: past days with the forecast taken at closeAt, the actual meals and a status. */
@@ -42,7 +50,7 @@ export function HistoryScreen() {
         <CardDescription>{t('history.intro')}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        {query.error ? <Alert variant="error">{apiErrorText(query.error)}</Alert> : null}
+        {query.error ? <Alert variant="destructive">{apiErrorText(query.error)}</Alert> : null}
         {data ? (
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => shift(-28)}>
@@ -56,30 +64,32 @@ export function HistoryScreen() {
             </Button>
           </div>
         ) : null}
-        {query.isLoading ? <p className="text-muted-foreground">{t('common.loading')}</p> : null}
+        {query.isLoading ? <LoadingRows /> : null}
         {data && data.items.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t('history.empty')}</p>
         ) : null}
         {data && data.items.length > 0 ? (
-          <Table>
-            <thead>
-              <tr>
-                <Th>{t('history.date')}</Th>
-                <Th className="text-right">{t('history.forecast')}</Th>
-                <Th className="text-right">{t('history.actual')}</Th>
-                <Th>{t('history.meals')}</Th>
-                <Th>{t('history.statusLabel')}</Th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table className="min-w-[36rem]">
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t('history.date')}</TableHead>
+                <TableHead className="text-right">{t('history.forecast')}</TableHead>
+                <TableHead className="text-right">{t('history.actual')}</TableHead>
+                <TableHead>{t('history.meals')}</TableHead>
+                <TableHead>{t('history.statusLabel')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {data.items.map((d) => (
-                <tr key={d.date}>
-                  <Td className="whitespace-nowrap">
+                <TableRow key={d.date}>
+                  <TableCell className="whitespace-nowrap">
                     {weekdayName(d.date)} {formatDate(d.date)}
-                  </Td>
-                  <Td className="text-right tabular-nums">{d.forecast ?? t('common.none')}</Td>
-                  <Td className="text-right tabular-nums">{d.actual}</Td>
-                  <Td className="text-sm">
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {d.forecast ?? t('common.none')}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{d.actual}</TableCell>
+                  <TableCell className="text-sm">
                     {d.meals
                       .map(
                         (m) =>
@@ -89,15 +99,15 @@ export function HistoryScreen() {
                             : ''),
                       )
                       .join(', ') || t('common.none')}
-                  </Td>
-                  <Td>
+                  </TableCell>
+                  <TableCell>
                     <Badge variant={STATUS_VARIANT[d.status]}>
                       {t(`history.status.${d.status}`)}
                     </Badge>
-                  </Td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
+            </TableBody>
           </Table>
         ) : null}
       </CardContent>

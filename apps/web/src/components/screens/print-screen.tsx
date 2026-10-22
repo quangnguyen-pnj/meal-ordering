@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { Printer } from 'lucide-react';
+import { useState } from 'react';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { LoadingRows } from '@/components/ui/skeleton';
+import { WeekNav } from '@/components/week-nav';
 import { apiErrorText } from '@/lib/errors';
 import { formatCloseAt, formatDate } from '@/lib/utils';
 import { t } from '@/messages';
@@ -12,7 +14,6 @@ import { weekdayName } from './day-meals';
 import {
   CanteenPicker,
   UnitPicker,
-  WeekPicker,
   useRegistrationGrid,
   useRegistrationUnits,
 } from './registration-admin-shared';
@@ -27,23 +28,28 @@ export function PrintScreen() {
   const [weekStart, setWeekStart] = useState<string | null>(null);
   const [unitId, setUnitId] = useState('');
   const [canteenId, setCanteenId] = useState('');
-  useEffect(() => {
-    if (units.data && !weekStart) setWeekStart(units.data.upcomingWeekStart);
-  }, [units.data, weekStart]);
-  const grid = useRegistrationGrid(unitId, weekStart, canteenId);
+  const home = units.data?.upcomingWeekStart;
+  const week = weekStart ?? home ?? null;
+  const grid = useRegistrationGrid(unitId, week, canteenId);
   const view = grid.data;
 
   return (
     <div className="flex flex-col gap-4">
       <Card className="print:hidden">
         <CardHeader>
-          <CardTitle>{t('print.title')}</CardTitle>
-          <CardDescription>{t('print.intro')}</CardDescription>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-col gap-1.5">
+              <CardTitle>{t('print.title')}</CardTitle>
+              <CardDescription>{t('print.intro')}</CardDescription>
+            </div>
+            {week ? (
+              <WeekNav weekStart={week} onChange={setWeekStart} homeWeekStart={home} />
+            ) : null}
+          </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          {units.error ? <Alert variant="error">{apiErrorText(units.error)}</Alert> : null}
+          {units.error ? <Alert variant="destructive">{apiErrorText(units.error)}</Alert> : null}
           <div className="flex flex-wrap items-end gap-3">
-            {weekStart ? <WeekPicker weekStart={weekStart} onChange={setWeekStart} /> : null}
             <UnitPicker
               id="print-unit"
               units={units.data?.items ?? []}
@@ -59,7 +65,8 @@ export function PrintScreen() {
               {t('print.print')}
             </Button>
           </div>
-          {grid.error ? <Alert variant="error">{apiErrorText(grid.error)}</Alert> : null}
+          {grid.error ? <Alert variant="destructive">{apiErrorText(grid.error)}</Alert> : null}
+          {grid.isLoading ? <LoadingRows rows={3} /> : null}
           {view?.state === 'NOT_PUBLISHED' ? (
             <Alert>{t('week.notPublished', { canteen: view.canteenName ?? '' })}</Alert>
           ) : null}
@@ -72,7 +79,7 @@ export function PrintScreen() {
           {view.days.map((day) => (
             <section
               key={day.date}
-              className="break-after-page rounded-md border bg-card p-4 print:rounded-none print:border-0 print:p-0"
+              className="break-after-page rounded-xl bg-card p-6 shadow-block print:rounded-none print:p-0 print:shadow-none"
             >
               <header className="mb-3 text-center">
                 <p className="text-base font-bold">{t('print.heading')}</p>

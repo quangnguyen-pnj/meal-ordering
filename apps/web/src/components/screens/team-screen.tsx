@@ -8,7 +8,15 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Table, Td, Th } from '@/components/ui/table';
+import { LoadingRows } from '@/components/ui/skeleton';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { ApiError, api } from '@/lib/api';
 import { apiErrorText } from '@/lib/errors';
 import { formatDate } from '@/lib/utils';
@@ -37,7 +45,7 @@ export function TeamScreen() {
         <CardDescription>{t('team.intro')}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <div className="flex w-72 flex-col gap-2">
+        <div className="flex w-full flex-col gap-2 sm:w-72">
           <Label htmlFor="team-q">{t('common.search')}</Label>
           <Input id="team-q" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
@@ -46,10 +54,10 @@ export function TeamScreen() {
           query.error instanceof ApiError && [403, 404].includes(query.error.status) ? (
             <Alert variant="warning">{t('week.unassigned')}</Alert>
           ) : (
-            <Alert variant="error">{apiErrorText(query.error)}</Alert>
+            <Alert variant="destructive">{apiErrorText(query.error)}</Alert>
           )
         ) : null}
-        {query.isLoading ? <p className="text-muted-foreground">{t('common.loading')}</p> : null}
+        {query.isLoading ? <LoadingRows /> : null}
         {data ? (
           <>
             <p className="text-sm">
@@ -60,32 +68,32 @@ export function TeamScreen() {
               <p className="text-sm text-muted-foreground">{t('team.empty')}</p>
             ) : (
               <Table>
-                <thead>
-                  <tr>
-                    <Th>{t('common.name')}</Th>
-                    <Th>{t('team.meals')}</Th>
-                    <Th>{t('team.status')}</Th>
-                  </tr>
-                </thead>
-                <tbody>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t('common.name')}</TableHead>
+                    <TableHead>{t('team.meals')}</TableHead>
+                    <TableHead>{t('team.status')}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {data.members.map((m) => (
-                    <tr key={m.key}>
-                      <Td className="font-medium">{m.name}</Td>
-                      <Td>
+                    <TableRow key={m.key}>
+                      <TableCell className="font-medium">{m.name}</TableCell>
+                      <TableCell>
                         {m.meals.length === 0
                           ? t('common.none')
                           : m.meals
                               .map((meal) => `${meal.quantity} × ${meal.displayName}`)
                               .join(', ')}
-                      </Td>
-                      <Td>
+                      </TableCell>
+                      <TableCell>
                         <Badge variant={m.eating ? 'success' : 'outline'}>
                           {m.eating ? t('team.eating') : t('team.notEating')}
                         </Badge>
-                      </Td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
+                </TableBody>
               </Table>
             )}
           </>

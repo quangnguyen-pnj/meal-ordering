@@ -1,12 +1,10 @@
 'use client';
 
-import { addDays, type RegistrationGridView, type RegistrationUnitOption } from '@meal/shared';
+import type { RegistrationGridView, RegistrationUnitOption } from '@meal/shared';
 import { useQuery } from '@tanstack/react-query';
-import { Button } from '@/components/ui/button';
+import { ResponsiveSelect } from '@/components/responsive-select';
 import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
 import { api } from '@/lib/api';
-import { formatDate } from '@/lib/utils';
 import { t } from '@/messages';
 
 export interface UnitsResponse {
@@ -35,39 +33,6 @@ export function useRegistrationGrid(unitId: string, weekStart: string | null, ca
   });
 }
 
-export function WeekPicker({
-  weekStart,
-  onChange,
-}: {
-  weekStart: string;
-  onChange: (weekStart: string) => void;
-}) {
-  return (
-    <div className="flex flex-col gap-2">
-      <span className="text-sm font-medium leading-none">{t('registrations.week')}</span>
-      <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          size="icon"
-          aria-label={t('menu.previousWeek')}
-          onClick={() => onChange(addDays(weekStart, -7))}
-        >
-          ‹
-        </Button>
-        <span className="min-w-28 text-center text-sm font-medium">{formatDate(weekStart)}</span>
-        <Button
-          variant="outline"
-          size="icon"
-          aria-label={t('menu.nextWeek')}
-          onClick={() => onChange(addDays(weekStart, 7))}
-        >
-          ›
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 export function UnitPicker({
   id,
   units,
@@ -80,20 +45,23 @@ export function UnitPicker({
   onChange: (id: string) => void;
 }) {
   return (
-    <div className="flex min-w-72 flex-1 flex-col gap-2 sm:max-w-md">
+    <div className="flex w-full min-w-0 flex-col gap-2 sm:max-w-md">
       <Label htmlFor={id}>{t('registrations.unit')}</Label>
-      <Select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
-        <option value="">{t('registrations.chooseUnit')}</option>
-        {units.map((u) => (
-          <option key={u.id} value={u.id}>
-            {t('registrations.unitOption', { path: u.pathName, count: u.employeeCount })}
-          </option>
-        ))}
-      </Select>
+      <ResponsiveSelect
+        id={id}
+        value={value}
+        onValueChange={onChange}
+        placeholder={t('registrations.chooseUnit')}
+        options={units.map((u) => ({
+          value: u.id,
+          label: t('registrations.unitOption', { path: u.pathName, count: u.employeeCount }),
+        }))}
+      />
     </div>
   );
 }
 
+/** Only shown when the employees below the node eat in more than one canteen. */
 export function CanteenPicker({
   id,
   grid,
@@ -105,15 +73,14 @@ export function CanteenPicker({
 }) {
   if (!grid || grid.canteens.length < 2) return null;
   return (
-    <div className="flex w-56 flex-col gap-2">
+    <div className="flex w-full flex-col gap-2 sm:w-56">
       <Label htmlFor={id}>{t('registrations.canteen')}</Label>
-      <Select id={id} value={grid.canteenId ?? ''} onChange={(e) => onChange(e.target.value)}>
-        {grid.canteens.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.name}
-          </option>
-        ))}
-      </Select>
+      <ResponsiveSelect
+        id={id}
+        value={grid.canteenId ?? ''}
+        onValueChange={onChange}
+        options={grid.canteens.map((c) => ({ value: c.id, label: c.name }))}
+      />
     </div>
   );
 }

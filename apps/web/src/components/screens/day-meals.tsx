@@ -89,7 +89,7 @@ export function DayMeals({
           <span>· {t('week.forecast', { count: day.forecastTotal })}</span>
         ) : null}
         {day.changed ? <Badge variant="warning">{t('week.changed')}</Badge> : null}
-        {day.extra ? <Badge>{t('week.extra')}</Badge> : null}
+        {day.extra ? <Badge variant="secondary">{t('week.extra')}</Badge> : null}
       </div>
     </div>
   );

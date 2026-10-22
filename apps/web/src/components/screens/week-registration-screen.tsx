@@ -4,9 +4,13 @@ import { addDays, type MyRegistrationWeekView, type SaveRegistrationResult } fro
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CopyCheck, History } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { useConfirm } from '@/components/confirm-dialog';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { LoadingRows } from '@/components/ui/skeleton';
+import { WeekNav } from '@/components/week-nav';
 import { api } from '@/lib/api';
 import { apiErrorText } from '@/lib/errors';
 import {
@@ -24,7 +28,7 @@ import { formatCloseAt, formatDate, formatVnTime } from '@/lib/utils';
 import { t, vi } from '@/messages';
 import { DayMeals, DayWindowBadge, weekdayName } from './day-meals';
 
-type Notice = { variant: 'info' | 'warning'; lines: string[] } | null;
+type Notice = { variant: 'default' | 'warning'; lines: string[] } | null;
 
 const weekUrl = (weekStart: string | null) =>
   `/registrations/me/week${weekStart ? `?weekStart=${weekStart}` : ''}`;
@@ -44,6 +48,10 @@ export function WeekRegistrationScreen() {
   const data = query.data;
   const published = data?.state === 'PUBLISHED' ? data : null;
   const current = weekStart ?? data?.weekStart ?? null;
+  // The week the API picked on first load (J1); WeekNav offers a way back to it.
+  const [homeWeek, setHomeWeek] = useState<string | null>(null);
+  if (!homeWeek && !weekStart && current) setHomeWeek(current);
+  const [confirm, confirmDialog] = useConfirm();
 
   const [draft, setDraft] = useState<Draft>({});
   const [notice, setNotice] = useState<Notice>(null);
@@ -63,16 +71,11 @@ export function WeekRegistrationScreen() {
       ),
     onSuccess: (res) => {
       qc.setQueryData(['/registrations/me/week', weekStart], res.view);
+      setNotice(null);
       if (res.view.state === 'PUBLISHED') {
-        setNotice({
-          variant: 'info',
-          lines: [
-            t('week.saved', {
-              meals: res.view.totalMeals,
-              time: formatCloseAt(res.view.closeAt),
-            }),
-          ],
-        });
+        toast.success(
+          t('week.saved', { meals: res.view.totalMeals, time: formatCloseAt(res.view.closeAt) }),
+        );
       }
     },
   });
@@ -96,7 +99,7 @@ export function WeekRegistrationScreen() {
 
   function shortcutNotice(skipped: Array<{ date: string; type: string; quantity: number }>) {
     return {
-      variant: skipped.length > 0 ? ('warning' as const) : ('info' as const),
+      variant: skipped.length > 0 ? ('warning' as const) : ('default' as const),
       lines: [
         t('week.shortcutDone'),
         ...skipped.map((s) =>
@@ -110,12 +113,15 @@ export function WeekRegistrationScreen() {
     };
   }
 
-  const go = (delta: number) => {
-    if (!current) return;
-    if (changed.length > 0 && !window.confirm(t('week.leaveConfirm'))) return;
+  async function go(next: string) {
+    if (
+      changed.length > 0 &&
+      !(await confirm({ title: t('week.leaveConfirm'), confirmLabel: t('week.discard') }))
+    )
+      return;
     setNotice(null);
-    setWeekStart(addDays(current, delta));
-  };
+    setWeekStart(next);
+  }
 
   const error = query.error ?? save.error ?? lastWeek.error;
   const lockTime = days[0] ? formatVnTime(days[0].lockAt) : '';
@@ -129,33 +135,18 @@ export function WeekRegistrationScreen() {
             <CardDescription>{t('week.intro')}</CardDescription>
           </div>
           {current ? (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label={t('menu.previousWeek')}
-                onClick={() => go(-7)}
-              >
-                ‹
-              </Button>
-              <span className="min-w-28 text-center text-sm font-medium">
-                {formatDate(current)}
-              </span>
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label={t('menu.nextWeek')}
-                onClick={() => go(7)}
-              >
-                ›
-              </Button>
-            </div>
+            <WeekNav
+              weekStart={current}
+              onChange={(next) => void go(next)}
+              homeWeekStart={homeWeek ?? undefined}
+            />
           ) : null}
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        {error ? <Alert variant="error">{apiErrorText(error)}</Alert> : null}
-        {query.isLoading ? <p className="text-muted-foreground">{t('common.loading')}</p> : null}
+        {confirmDialog}
+        {error ? <Alert variant="destructive">{apiErrorText(error)}</Alert> : null}
+        {query.isLoading ? <LoadingRows rows={4} /> : null}
         {data?.state === 'UNASSIGNED' ? (
           <Alert variant="warning">{t('week.unassigned')}</Alert>
         ) : null}
@@ -165,7 +156,7 @@ export function WeekRegistrationScreen() {
 
         {published ? (
           <>
-            <Alert variant={published.forecastTaken ? 'info' : 'warning'}>
+            <Alert variant={published.forecastTaken ? 'default' : 'warning'}>
               <p>{t('week.canteen', { canteen: published.canteenName })}</p>
               <p className="font-medium">
                 {published.forecastTaken
@@ -195,9 +186,12 @@ export function WeekRegistrationScreen() {
               </Alert>
             ) : null}
 
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {days.map((day) => (
-                <section key={day.date} className="flex flex-col gap-3 rounded-md border p-3">
+                <section
+                  key={day.date}
+                  className="flex flex-col gap-3 rounded-lg bg-card p-4 shadow-block"
+                >
                   <header className="flex flex-wrap items-center justify-between gap-2">
                     <h2 className="font-medium">
                       {weekdayName(day.date)}{' '}
@@ -212,7 +206,7 @@ export function WeekRegistrationScreen() {
                     quantities={draft[day.date] ?? {}}
                     onChange={(itemId, q) => setDraft((d) => setQuantity(d, day.date, itemId, q))}
                   />
-                  <footer className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t pt-2">
+                  <footer className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2">
                     <span className="text-sm font-medium">
                       {t('week.dayTotal', { count: dayTotal(draft, day.date) })}
                     </span>
@@ -235,7 +229,7 @@ export function WeekRegistrationScreen() {
               ))}
             </div>
 
-            <div className="sticky bottom-0 z-20 flex flex-wrap items-center justify-between gap-3 rounded-md border bg-card p-3 shadow-sm">
+            <div className="sticky bottom-0 z-20 -mx-6 flex flex-wrap items-center justify-between gap-3 bg-card px-6 py-3 shadow-[0_-6px_16px_-6px_rgb(41_37_36/0.12)]">
               <div className="text-sm">
                 <p className="font-medium">{t('week.totalMeals', { count: total })}</p>
                 <p className="text-muted-foreground">
@@ -244,7 +238,7 @@ export function WeekRegistrationScreen() {
               </div>
               <div className="flex gap-2">
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   disabled={changed.length === 0 || save.isPending}
                   onClick={() => {
                     setDraft(draftFromDays(days));

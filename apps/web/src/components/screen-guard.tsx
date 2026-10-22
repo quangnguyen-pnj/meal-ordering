@@ -11,7 +11,7 @@ export async function ScreenGuard({ href, children }: { href: string; children: 
   const item = findNavItem(href);
   const user = await getSession();
   if (!item || !user || !isNavItemVisible(item, user.roles)) {
-    return <Alert variant="error">{t('placeholder.forbidden')}</Alert>;
+    return <Alert variant="destructive">{t('placeholder.forbidden')}</Alert>;
   }
   return <>{children}</>;
 }

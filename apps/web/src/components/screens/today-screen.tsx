@@ -3,9 +3,12 @@
 import type { MyDayRegistrationView, SaveRegistrationResult } from '@meal/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { useConfirm } from '@/components/confirm-dialog';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { LoadingRows } from '@/components/ui/skeleton';
 import { api } from '@/lib/api';
 import { apiErrorText } from '@/lib/errors';
 import { linesOf } from '@/lib/registration-draft';
@@ -49,7 +52,7 @@ export function TodayScreen() {
   const data = query.data;
   const view = data?.state === 'DAY' ? data : null;
   const [quantities, setQuantities] = useState<Record<string, number>>({});
-  const [saved, setSaved] = useState(false);
+  const [confirm, confirmDialog] = useConfirm();
   useEffect(() => {
     if (view) {
       setQuantities(Object.fromEntries(view.day.items.map((i) => [i.menuItemId, i.quantity])));
@@ -65,7 +68,7 @@ export function TodayScreen() {
       ),
     onSuccess: (res) => {
       qc.setQueryData(KEY, res.view);
-      setSaved(true);
+      toast.success(t('common.saved'));
     },
   });
 
@@ -84,9 +87,10 @@ export function TodayScreen() {
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        {query.error ? <Alert variant="error">{apiErrorText(query.error)}</Alert> : null}
-        {save.error ? <Alert variant="error">{apiErrorText(save.error)}</Alert> : null}
-        {query.isLoading ? <p className="text-muted-foreground">{t('common.loading')}</p> : null}
+        {confirmDialog}
+        {query.error ? <Alert variant="destructive">{apiErrorText(query.error)}</Alert> : null}
+        {save.error ? <Alert variant="destructive">{apiErrorText(save.error)}</Alert> : null}
+        {query.isLoading ? <LoadingRows rows={3} /> : null}
         {data?.state === 'UNASSIGNED' ? (
           <Alert variant="warning">{t('week.unassigned')}</Alert>
         ) : null}
@@ -97,7 +101,7 @@ export function TodayScreen() {
         {view && day ? (
           <>
             <dl className="grid grid-cols-2 gap-3 sm:max-w-md">
-              <div className="rounded-md border p-3">
+              <div className="rounded-lg bg-card p-4 shadow-block">
                 <dt className="text-xs text-muted-foreground">{t('today.forecastLabel')}</dt>
                 <dd className="text-xl font-semibold tabular-nums">
                   {day.forecastTotal === null
@@ -105,7 +109,7 @@ export function TodayScreen() {
                     : t('today.meals', { count: day.forecastTotal })}
                 </dd>
               </div>
-              <div className="rounded-md border p-3">
+              <div className="rounded-lg bg-card p-4 shadow-block">
                 <dt className="text-xs text-muted-foreground">{t('today.actualLabel')}</dt>
                 <dd className="text-xl font-semibold tabular-nums">
                   {t('today.meals', { count: day.actualTotal })}
@@ -126,18 +130,13 @@ export function TodayScreen() {
               </Alert>
             ) : null}
 
-            <section className="max-w-xl rounded-md border p-3">
+            <section className="max-w-xl rounded-lg bg-card p-4 shadow-block">
               <DayMeals
                 day={locked ? { ...day, window: 'LOCKED' } : day}
                 quantities={quantities}
-                onChange={(id, q) => {
-                  setSaved(false);
-                  setQuantities((prev) => ({ ...prev, [id]: q }));
-                }}
+                onChange={(id, q) => setQuantities((prev) => ({ ...prev, [id]: q }))}
               />
             </section>
-
-            {saved && !dirty ? <Alert role="status">{t('common.saved')}</Alert> : null}
 
             {!locked ? (
               <div className="flex flex-wrap gap-2">
@@ -147,8 +146,13 @@ export function TodayScreen() {
                 <Button
                   variant="outline"
                   disabled={save.isPending || (total === 0 && day.actualTotal === 0)}
-                  onClick={() => {
-                    if (!window.confirm(t('today.notEatingConfirm'))) return;
+                  onClick={async () => {
+                    const ok = await confirm({
+                      title: t('today.notEatingConfirm'),
+                      confirmLabel: t('today.notEating'),
+                      destructive: true,
+                    });
+                    if (!ok) return;
                     const none = Object.fromEntries(day.items.map((i) => [i.menuItemId, 0]));
                     setQuantities(none);
                     save.mutate(none);

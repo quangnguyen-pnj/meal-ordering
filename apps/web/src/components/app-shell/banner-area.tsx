@@ -1,6 +1,7 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -13,7 +14,11 @@ export interface Banner {
   message: string;
   /** In-app notice (BR-14) the user can mark as read. */
   dismissId?: string;
+  /** Where to fix it, e.g. the menu builder for "menu not published". */
+  action?: { href: string; label: string };
 }
+
+const VARIANT = { info: 'default', warning: 'warning', error: 'destructive' } as const;
 
 /**
  * Top-of-page warnings shared by every screen (plan section 4): menu not published (BR-06) and
@@ -21,6 +26,7 @@ export interface Banner {
  */
 export function BannerArea({ banners }: { banners: readonly Banner[] }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
   const visible = banners.filter((b) => !hidden.has(b.id));
   if (visible.length === 0) return null;
@@ -36,16 +42,23 @@ export function BannerArea({ banners }: { banners: readonly Banner[] }) {
       {visible.map((b) => (
         <Alert
           key={b.id}
-          variant={b.severity}
+          variant={VARIANT[b.severity]}
           role={b.severity === 'error' ? 'alert' : 'status'}
-          className="flex items-start justify-between gap-3"
+          className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
         >
           <span>{b.message}</span>
-          {b.dismissId ? (
-            <Button variant="ghost" size="sm" onClick={() => dismiss(b)}>
-              {t('banners.dismiss')}
-            </Button>
-          ) : null}
+          <div className="flex shrink-0 gap-1">
+            {b.action && !pathname.startsWith(b.action.href) ? (
+              <Button asChild variant="outline" size="sm">
+                <Link href={b.action.href}>{b.action.label}</Link>
+              </Button>
+            ) : null}
+            {b.dismissId ? (
+              <Button variant="ghost" size="sm" onClick={() => dismiss(b)}>
+                {t('banners.dismiss')}
+              </Button>
+            ) : null}
+          </div>
         </Alert>
       ))}
     </section>
