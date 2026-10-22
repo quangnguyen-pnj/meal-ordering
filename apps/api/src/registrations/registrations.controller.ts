@@ -20,8 +20,10 @@ import {
   type ExtraMeal,
   type GridDaySave,
   type MyWeekSave,
+  upcomingWeekStart,
 } from '@meal/shared';
 import { z } from 'zod';
+import { ClockService } from '../clock/clock.service';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import { CurrentPrincipal, RequirePermission } from '../rbac/decorators';
 import type { AuthedRequest, RequestPrincipal } from '../rbac/rbac.types';
@@ -92,11 +94,11 @@ export class MyRegistrationsController {
 
   @RequirePermission(...OWN)
   @Get('history')
-  async history(
+  history(
     @Query(new ZodValidationPipe(HistoryQuerySchema)) q: z.infer<typeof HistoryQuerySchema>,
     @CurrentPrincipal() p: RequestPrincipal,
   ) {
-    return { items: await this.regs.history(p, q.from, q.to) };
+    return this.regs.history(p, q.from, q.to);
   }
 }
 
@@ -134,12 +136,19 @@ const ON_BEHALF_UNIT = [
 /** /admin/registrations and /admin/print (dept admins: their units; HC admins: the factory). */
 @Controller('admin/registrations')
 export class AdminRegistrationsController {
-  constructor(private readonly admin: AdminRegistrationsService) {}
+  constructor(
+    private readonly admin: AdminRegistrationsService,
+    private readonly clock: ClockService,
+  ) {}
 
   @RequirePermission('registration.onBehalf', { type: 'list' })
   @Get('units')
   async units(@Req() req: AuthedRequest, @CurrentPrincipal() p: RequestPrincipal) {
-    return { items: await this.admin.units(req.listScope ?? { kind: 'none' }, p.factoryId) };
+    return {
+      items: await this.admin.units(req.listScope ?? { kind: 'none' }, p.factoryId),
+      // Screens default to the coming week by server time (fake time in dev and tests).
+      upcomingWeekStart: upcomingWeekStart(this.clock.now()),
+    };
   }
 
   @RequirePermission('registration.onBehalf', { type: 'list' })

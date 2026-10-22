@@ -66,8 +66,8 @@ export function AppShell({
     .join(', ');
 
   return (
-    <div className="min-h-screen md:flex">
-      <header className="flex items-center justify-between border-b px-4 py-2 md:hidden">
+    <div className="min-h-screen lg:flex">
+      <header className="flex items-center justify-between border-b px-4 py-2 lg:hidden print:hidden">
         <span className="font-semibold">{t('app.name')}</span>
         <Button
           variant="ghost"
@@ -84,11 +84,11 @@ export function AppShell({
       <aside
         id="main-nav"
         className={cn(
-          'w-full shrink-0 border-b bg-card md:block md:w-64 md:border-b-0 md:border-r',
+          'w-full shrink-0 border-b bg-card lg:block lg:w-64 lg:border-b-0 lg:border-r print:hidden',
           open ? 'block' : 'hidden',
         )}
       >
-        <div className="hidden px-4 py-5 md:block">
+        <div className="hidden px-4 py-5 lg:block">
           <p className="text-lg font-semibold">{t('app.name')}</p>
           <p className="text-sm text-muted-foreground">{t('app.factory')}</p>
         </div>
@@ -115,7 +115,7 @@ export function AppShell({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center justify-end gap-3 border-b px-4 py-2">
+        <div className="flex items-center justify-end gap-3 border-b px-4 py-2 print:hidden">
           <div className="text-right text-sm leading-tight">
             <p className="font-medium">{user.name}</p>
             <p className="text-xs text-muted-foreground">
@@ -128,8 +128,10 @@ export function AppShell({
             {t('common.signOut')}
           </Button>
         </div>
-        <main className="flex flex-1 flex-col gap-4 p-4 md:p-6">
-          <BannerArea banners={banners} />
+        <main className="flex flex-1 flex-col gap-4 p-4 md:p-6 print:p-0">
+          <div className="print:hidden">
+            <BannerArea banners={banners} />
+          </div>
           {children}
         </main>
       </div>

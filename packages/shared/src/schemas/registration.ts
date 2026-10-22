@@ -102,7 +102,15 @@ export type MyDayRegistrationView =
       closeAt: string;
       forecastTaken: boolean;
       day: MyDayView;
+      /** Server time (ClockService), so the countdown to the lock follows fake time too. */
+      now: string;
     };
+
+export interface HistoryView {
+  from: string;
+  to: string;
+  items: HistoryDayView[];
+}
 
 export interface HistoryDayView {
   date: string;

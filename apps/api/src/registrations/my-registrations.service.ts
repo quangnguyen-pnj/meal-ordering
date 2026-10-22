@@ -10,6 +10,7 @@ import {
   upcomingWeekStart,
   validateDaySelection,
   type HistoryDayView,
+  type HistoryView,
   type MyDayRegistrationView,
   type MyRegistrationWeekView,
   type MyWeekSave,
@@ -161,6 +162,7 @@ export class MyRegistrationsService {
       closeAt: view.closeAt,
       forecastTaken: view.forecastTaken,
       day,
+      now: this.clock.now().toISOString(),
     };
   }
 
@@ -273,7 +275,7 @@ export class MyRegistrationsService {
   }
 
   /** /history: past days with forecast, actual and status, newest first. */
-  async history(p: RequestPrincipal, from?: string, to?: string): Promise<HistoryDayView[]> {
+  async history(p: RequestPrincipal, from?: string, to?: string): Promise<HistoryView> {
     const today = toVnDateTime(this.clock.now()).date;
     const end = to ?? today;
     const start = from ?? addDays(end, -27);
@@ -339,7 +341,7 @@ export class MyRegistrationsService {
         m.cancelled += r.quantity;
       }
     }
-    return [...byDate.values()]
+    const items = [...byDate.values()]
       .map((e) => ({
         ...e,
         status:
@@ -350,6 +352,7 @@ export class MyRegistrationsService {
               : ('NOT_REGISTERED' as const),
       }))
       .sort((a, b) => b.date.localeCompare(a.date));
+    return { from: start, to: end, items };
   }
 
   /**
