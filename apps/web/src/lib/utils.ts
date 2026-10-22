@@ -1,4 +1,4 @@
-import { lastAcceptedMinute } from '@meal/shared';
+import { addDays, lastAcceptedMinute } from '@meal/shared';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -28,6 +28,21 @@ export function formatVnTime(iso: string): string {
 export function formatDate(date: string): string {
   const [y, m, d] = date.split('-');
   return `${d}/${m}/${y}`;
+}
+
+/** "26/10 – 01/11/2026" for the Monday YYYY-MM-DD of a week (Monday to Sunday). */
+export function formatWeekRange(weekStart: string): string {
+  const end = addDays(weekStart, 6);
+  const [, sm, sd] = weekStart.split('-');
+  const [ey, em, ed] = end.split('-');
+  return `${sd}/${sm} – ${ed}/${em}/${ey}`;
+}
+
+/** "1–50 / 1.700" for a page of a list. */
+export function formatRange(offset: number, count: number, total: number): string {
+  const n = new Intl.NumberFormat('vi-VN');
+  if (total === 0) return '0';
+  return `${n.format(offset + 1)}–${n.format(offset + count)} / ${n.format(total)}`;
 }
 
 /** dd/MM/yyyy HH:mm in Asia/Ho_Chi_Minh for an ISO instant. */

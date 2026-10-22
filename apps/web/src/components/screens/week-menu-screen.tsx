@@ -1,11 +1,12 @@
 'use client';
 
-import { addDays, isoWeekdayOf, type MyMenuWeekView } from '@meal/shared';
+import { isoWeekdayOf, type MyMenuWeekView } from '@meal/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Alert } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { LoadingRows } from '@/components/ui/skeleton';
+import { WeekNav } from '@/components/week-nav';
 import { api } from '@/lib/api';
 import { apiErrorText } from '@/lib/errors';
 import { formatCloseAt, formatDate } from '@/lib/utils';
@@ -17,6 +18,8 @@ import { t, vi } from '@/messages';
  */
 export function WeekMenuScreen() {
   const [weekStart, setWeekStart] = useState<string | null>(null);
+  // The week the API picked on first load; WeekNav offers a way back to it.
+  const [homeWeek, setHomeWeek] = useState<string | null>(null);
   const menu = useQuery({
     queryKey: ['/menu/my-week', weekStart],
     queryFn: () =>
@@ -25,6 +28,7 @@ export function WeekMenuScreen() {
   const data = menu.data;
   const current =
     weekStart ?? (data?.state === 'PUBLISHED' ? data.menu.weekStart : data?.weekStart);
+  if (!homeWeek && !weekStart && current) setHomeWeek(current);
 
   return (
     <Card>
@@ -35,32 +39,16 @@ export function WeekMenuScreen() {
             <CardDescription>{t('week.intro')}</CardDescription>
           </div>
           {current ? (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label={t('menu.previousWeek')}
-                onClick={() => setWeekStart(addDays(current, -7))}
-              >
-                ‹
-              </Button>
-              <span className="min-w-28 text-center text-sm font-medium">
-                {formatDate(current)}
-              </span>
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label={t('menu.nextWeek')}
-                onClick={() => setWeekStart(addDays(current, 7))}
-              >
-                ›
-              </Button>
-            </div>
+            <WeekNav
+              weekStart={current}
+              onChange={setWeekStart}
+              homeWeekStart={homeWeek ?? undefined}
+            />
           ) : null}
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        {menu.error ? <Alert variant="error">{apiErrorText(menu.error)}</Alert> : null}
+        {menu.error ? <Alert variant="destructive">{apiErrorText(menu.error)}</Alert> : null}
         {data?.state === 'UNASSIGNED' ? (
           <Alert variant="warning">{t('week.unassigned')}</Alert>
         ) : null}
@@ -73,16 +61,16 @@ export function WeekMenuScreen() {
               {t('week.canteen', { canteen: data.menu.canteenName })} ·{' '}
               <strong>{t('week.closeAt', { time: formatCloseAt(data.menu.closeAt) })}</strong>
             </p>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {data.menu.days.map((day) => (
-                <section key={day.date} className="rounded-md border p-3">
+                <section key={day.date} className="rounded-lg bg-card p-4 shadow-block">
                   <h2 className="font-medium">
                     {vi.weekdays[isoWeekdayOf(day.date) as keyof typeof vi.weekdays]}{' '}
                     <span className="text-sm font-normal text-muted-foreground">
                       {formatDate(day.date)}
                     </span>
                   </h2>
-                  <ul className="mt-2 flex flex-col gap-1 text-sm">
+                  <ul className="mt-2 flex list-disc flex-col gap-1 pl-5 text-sm">
                     {day.items.map((i) => (
                       <li key={i.id}>{i.displayName}</li>
                     ))}
@@ -97,7 +85,7 @@ export function WeekMenuScreen() {
             </div>
           </>
         ) : null}
-        {menu.isLoading ? <p className="text-muted-foreground">{t('common.loading')}</p> : null}
+        {menu.isLoading ? <LoadingRows rows={4} /> : null}
       </CardContent>
     </Card>
   );

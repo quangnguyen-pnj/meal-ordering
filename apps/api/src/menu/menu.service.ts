@@ -339,7 +339,8 @@ export class MenuService {
               notices.push({
                 employeeIds: [...new Set(regs.map((x) => x.employeeId))],
                 type: 'MENU_DISH_REMOVED',
-                payload: { date: day.date, dish: this.displayName(dishes, r.dishId) },
+                // The deadline comes from the day.lockTime setting, never a fixed hour (rule 3).
+                payload: { date: day.date, dish: this.displayName(dishes, r.dishId), lockTime },
               });
             }
           }

@@ -372,6 +372,10 @@ describe('BR-14: editing a published menu', () => {
       from: '[Mặn] Cá kho tộ',
       to: '[Mặn] Sườn ram',
     });
+    const removed = notices.find(
+      (n: { notificationType: string }) => n.notificationType === 'MENU_DISH_REMOVED',
+    );
+    expect(removed.params).toMatchObject({ lockTime: '08:00' });
 
     // A colleague cannot dismiss someone else's notice.
     await colleague.post(`/api/me/notifications/${replaced.notificationId}/read`).expect(404);

@@ -11,6 +11,8 @@ export interface NavItem {
   action: Action;
   /** Phase that completes the screen; the catch-all placeholder shows it until a page exists. */
   phase: string;
+  /** False while the screen is only a placeholder: the menu greys it out with "Sắp có". */
+  available: boolean;
 }
 
 export const NAV_ITEMS: readonly NavItem[] = [
@@ -20,6 +22,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     group: 'mine',
     action: 'menu.registerOwn',
     phase: 'P2',
+    available: false,
   },
   {
     href: '/week',
@@ -27,14 +30,23 @@ export const NAV_ITEMS: readonly NavItem[] = [
     group: 'mine',
     action: 'menu.registerOwn',
     phase: 'P2',
+    available: true,
   },
-  { href: '/team', labelKey: 'nav.items.team', group: 'mine', action: 'team.view', phase: 'P2' },
+  {
+    href: '/team',
+    labelKey: 'nav.items.team',
+    group: 'mine',
+    action: 'team.view',
+    phase: 'P2',
+    available: false,
+  },
   {
     href: '/history',
     labelKey: 'nav.items.history',
     group: 'mine',
     action: 'menu.registerOwn',
     phase: 'P2',
+    available: false,
   },
   {
     href: '/admin/today',
@@ -42,6 +54,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     group: 'admin',
     action: 'presence.confirm',
     phase: 'P3',
+    available: false,
   },
   {
     href: '/admin/registrations',
@@ -49,6 +62,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     group: 'admin',
     action: 'registration.onBehalf',
     phase: 'P2',
+    available: false,
   },
   {
     href: '/admin/print',
@@ -56,6 +70,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     group: 'admin',
     action: 'registration.onBehalf',
     phase: 'P2',
+    available: false,
   },
   {
     href: '/admin/dishes',
@@ -63,6 +78,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     group: 'admin',
     action: 'dishes.manage',
     phase: 'P1',
+    available: true,
   },
   {
     href: '/admin/menu',
@@ -70,6 +86,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     group: 'admin',
     action: 'menu.manage',
     phase: 'P1',
+    available: true,
   },
   {
     href: '/admin/reconciliation',
@@ -77,6 +94,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     group: 'admin',
     action: 'reconciliation.view',
     phase: 'P4',
+    available: false,
   },
   {
     href: '/admin/delivery',
@@ -84,6 +102,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     group: 'admin',
     action: 'delivery.confirmUnit',
     phase: 'P5',
+    available: false,
   },
   {
     href: '/admin/reports',
@@ -91,6 +110,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     group: 'admin',
     action: 'reports.view',
     phase: 'P6',
+    available: false,
   },
   {
     href: '/admin/master',
@@ -98,6 +118,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     group: 'admin',
     action: 'org.manage',
     phase: 'P1',
+    available: true,
   },
   {
     href: '/admin/org',
@@ -105,6 +126,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     group: 'admin',
     action: 'org.manage',
     phase: 'P1',
+    available: true,
   },
   {
     href: '/admin/employees',
@@ -112,6 +134,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     group: 'admin',
     action: 'pin.reset',
     phase: 'P1',
+    available: true,
   },
   {
     href: '/admin/settings',
@@ -119,6 +142,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     group: 'admin',
     action: 'settings.manage',
     phase: 'P1',
+    available: true,
   },
   {
     href: '/admin/audit',
@@ -126,6 +150,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     group: 'admin',
     action: 'audit.view',
     phase: 'P6',
+    available: false,
   },
   {
     href: '/system',
@@ -133,6 +158,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     group: 'admin',
     action: 'integration.configure',
     phase: 'P1',
+    available: true,
   },
 ];
 
