@@ -121,10 +121,10 @@ export function AppShell({
     <nav aria-label={t('nav.label')} className="flex flex-col gap-4 px-2 py-4 md:pt-0">
       {groups.map((group) => (
         <div key={group.key}>
-          <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <p className="px-3 pb-1 text-[0.6875rem] font-bold uppercase tracking-wide text-muted-foreground">
             {group.title}
           </p>
-          <ul className="flex flex-col gap-0.5">
+          <ul className="flex flex-col gap-0.5 font-medium">
             {group.items.map((item) => (
               <li key={item.href}>
                 <NavLink

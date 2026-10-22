@@ -79,7 +79,7 @@ export const vi = {
     comingSoon: 'Sắp có',
     comingSoonHint: 'Màn hình này sẽ có ở giai đoạn {phase}.',
     groups: {
-      mine: 'Của tôi',
+      mine: 'Thông tin suất ăn của tôi',
       admin: 'Quản trị',
     },
     items: {
