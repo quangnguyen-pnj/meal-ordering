@@ -48,6 +48,8 @@ export interface OrgUnitView {
   isMealUnit: boolean;
   own: { floorId: string | null; canteenId: string | null; costCenterId: string | null };
   resolved: { floor: ResolvedValueView; canteen: ResolvedValueView; costCenter: ResolvedValueView };
+  /** BR-60: the nearest meal unit at or above this node, i.e. the one its employees belong to. */
+  mealUnitId: string | null;
   /** BR-63: only meaningful for meal units. */
   mealUnitValid: boolean | null;
   /** Employees attached directly to this node. */

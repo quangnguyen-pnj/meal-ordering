@@ -21,6 +21,15 @@ import { Table, Td, Th } from '@/components/ui/table';
 import { Tabs } from '@/components/ui/tabs';
 import { ApiError, api } from '@/lib/api';
 import { apiErrorText } from '@/lib/errors';
+import {
+  headcountByMealUnit,
+  indexTree,
+  mealUnitsInheriting,
+  nodePath,
+  subtree,
+  unassignedBelow,
+  type OrgTreeIndex,
+} from '@/lib/org-tree';
 import { cn } from '@/lib/utils';
 import { t, vi } from '@/messages';
 
@@ -99,22 +108,36 @@ function useMaster(kind: 'floors' | 'canteens' | 'cost-centers') {
   });
 }
 
+/** "tầng, nhà ăn": what a meal unit still lacks (BR-63). */
+const missingParts = (n: OrgUnitView) =>
+  (['floor', 'canteen'] as const)
+    .filter((k) => n.resolved[k].id === null)
+    .map((k) => vi.org.missingParts[k])
+    .join(', ');
+
+function useMasterName(kind: 'floors' | 'canteens') {
+  const list = useMaster(kind);
+  return (id: string | null) =>
+    list.data?.items.find((o) => o.id === id)?.name ?? t('common.notSet');
+}
+
+type TreeView = 'tree' | 'mealUnits';
+
 function TreeTab() {
   const tree = useQuery({
     queryKey: ['/admin/org/tree'],
     queryFn: () => api.get<{ items: OrgUnitView[] }>('/admin/org/tree'),
   });
+  const [view, setView] = useState<TreeView>('tree');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<ReadonlySet<string> | 'all'>(new Set());
   const [filter, setFilter] = useState('');
 
   const nodes = tree.data?.items ?? [];
-  const byId = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
-  const children = useMemo(() => {
-    const map = new Map<string | null, OrgUnitView[]>();
-    for (const n of nodes) map.set(n.parentId, [...(map.get(n.parentId) ?? []), n]);
-    return map;
-  }, [nodes]);
+  const idx = useMemo(() => indexTree(nodes), [nodes]);
+  const { byId, children } = idx;
+  const mealCounts = useMemo(() => headcountByMealUnit(nodes), [nodes]);
+  const unassigned = useMemo(() => unassignedBelow(idx), [idx]);
 
   // With a filter, show matches and their ancestors, fully expanded.
   const visibleIds = useMemo(() => {
@@ -142,6 +165,33 @@ function TreeTab() {
       else next.add(id);
       return next;
     });
+
+  // BR-60: a meal unit shows its group size, other nodes name the meal unit they follow.
+  const mealTag = (n: OrgUnitView) => {
+    if (n.isMealUnit) {
+      const count = mealCounts.get(n.id) ?? 0;
+      return (
+        <Badge variant={n.mealUnitValid ? 'default' : 'error'}>
+          {n.mealUnitValid
+            ? t('org.mealUnitBadge', { count })
+            : t('org.mealUnitInvalidBadge', { missing: missingParts(n), count })}
+        </Badge>
+      );
+    }
+    if (n.mealUnitId) {
+      return (
+        <span className="text-xs text-muted-foreground">
+          <span aria-hidden>→ </span>
+          <span className="sr-only">{t('org.followsMealUnit')} </span>
+          {byId.get(n.mealUnitId)?.name}
+        </span>
+      );
+    }
+    const count = unassigned.get(n.id) ?? 0;
+    return count > 0 ? (
+      <Badge variant="warning">{t('org.noMealUnitBadge', { count })}</Badge>
+    ) : null;
+  };
 
   const renderNode = (n: OrgUnitView, depth: number): React.ReactNode => {
     if (visibleIds && !visibleIds.has(n.id)) return null;
@@ -181,11 +231,7 @@ function TreeTab() {
               {n.name}
             </span>
             <span className="font-mono text-xs text-muted-foreground">{n.dmpCode}</span>
-            {n.isMealUnit ? (
-              <Badge variant={n.mealUnitValid ? 'success' : 'error'}>
-                {n.mealUnitValid ? t('org.mealUnit') : t('org.mealUnitInvalid')}
-              </Badge>
-            ) : null}
+            {mealTag(n)}
             {n.directHeadcount > 0 ? (
               <span className="text-xs text-muted-foreground">
                 {t('org.headcount', { count: n.directHeadcount })}
@@ -214,20 +260,52 @@ function TreeTab() {
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
           />
-          <Button variant="ghost" size="sm" onClick={() => setExpanded('all')}>
-            {t('org.expandAll')}
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setExpanded(new Set())}>
-            {t('org.collapseAll')}
-          </Button>
+          <div
+            role="group"
+            aria-label={t('org.viewLabel')}
+            className="flex rounded-md border p-0.5"
+          >
+            {(['tree', 'mealUnits'] as const).map((v) => (
+              <Button
+                key={v}
+                variant="ghost"
+                size="sm"
+                className={cn(view === v && 'bg-accent font-medium')}
+                aria-pressed={view === v}
+                onClick={() => setView(v)}
+              >
+                {v === 'tree' ? t('org.viewTree') : t('org.viewMealUnits')}
+              </Button>
+            ))}
+          </div>
+          {view === 'tree' ? (
+            <>
+              <Button variant="ghost" size="sm" onClick={() => setExpanded('all')}>
+                {t('org.expandAll')}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setExpanded(new Set())}>
+                {t('org.collapseAll')}
+              </Button>
+            </>
+          ) : null}
         </div>
-        <ul className="rounded-md border p-2">
-          {(children.get(null) ?? []).map((n) => renderNode(n, 0))}
-        </ul>
+        {view === 'tree' ? (
+          <ul className="rounded-md border p-2">
+            {(children.get(null) ?? []).map((n) => renderNode(n, 0))}
+          </ul>
+        ) : (
+          <MealUnitList
+            idx={idx}
+            mealCounts={mealCounts}
+            filter={filter.trim().toLowerCase()}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+          />
+        )}
       </div>
       <div>
         {selected ? (
-          <NodeDetail key={selected.id} node={selected} byId={byId} />
+          <NodeDetail key={selected.id} node={selected} idx={idx} />
         ) : (
           <p className="text-sm text-muted-foreground">{t('org.selectNode')}</p>
         )}
@@ -236,11 +314,153 @@ function TreeTab() {
   );
 }
 
-function NodeDetail({ node, byId }: { node: OrgUnitView; byId: Map<string, OrgUnitView> }) {
+/** Every meal unit of the factory on one screen: the groups meals are delivered to (BR-60). */
+function MealUnitList({
+  idx,
+  mealCounts,
+  filter,
+  selectedId,
+  onSelect,
+}: {
+  idx: OrgTreeIndex;
+  mealCounts: Map<string | null, number>;
+  filter: string;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const floorName = useMasterName('floors');
+  const canteenName = useMasterName('canteens');
+  const all = [...idx.byId.values()].filter((n) => n.isMealUnit);
+  const units = filter
+    ? all.filter(
+        (n) => n.name.toLowerCase().includes(filter) || n.dmpCode.toLowerCase().includes(filter),
+      )
+    : all;
+  const nameOr = (id: string | null, name: (id: string | null) => string) =>
+    id === null ? t('common.none') : name(id);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-sm text-muted-foreground">
+        {t('org.mealUnitsSummary', { count: all.length, unassigned: mealCounts.get(null) ?? 0 })}
+      </p>
+      <Table>
+        <thead>
+          <tr>
+            <Th>{t('org.mealUnit')}</Th>
+            <Th>{t('org.path')}</Th>
+            <Th>{t('org.mealUnitPeople')}</Th>
+            <Th>{t('org.floor')}</Th>
+            <Th>{t('org.canteen')}</Th>
+            <Th>{t('org.mealUnitState')}</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {units.map((n) => (
+            <tr key={n.id} className={cn(selectedId === n.id && 'bg-accent')}>
+              <Td>
+                <button
+                  type="button"
+                  className="min-h-11 text-left font-medium underline-offset-4 hover:underline"
+                  onClick={() => onSelect(n.id)}
+                >
+                  {n.name}
+                </button>
+              </Td>
+              <Td>{nodePath(n.id, idx)}</Td>
+              <Td>{mealCounts.get(n.id) ?? 0}</Td>
+              <Td>{nameOr(n.resolved.floor.id, floorName)}</Td>
+              <Td>{nameOr(n.resolved.canteen.id, canteenName)}</Td>
+              <Td>
+                {n.mealUnitValid ? (
+                  <Badge variant="success">{t('org.mealUnitOk')}</Badge>
+                ) : (
+                  <Badge variant="error">
+                    {t('org.mealUnitMissing', { missing: missingParts(n) })}
+                  </Badge>
+                )}
+              </Td>
+            </tr>
+          ))}
+          {units.length === 0 ? (
+            <tr>
+              <Td colSpan={6} className="text-muted-foreground">
+                {t('org.noMealUnits')}
+              </Td>
+            </tr>
+          ) : null}
+        </tbody>
+      </Table>
+    </div>
+  );
+}
+
+/** BR-60 / BR-63: where the employees of this node get their meal, in words. */
+function mealStatus(
+  node: OrgUnitView,
+  idx: OrgTreeIndex,
+  floorName: (id: string | null) => string,
+  canteenName: (id: string | null) => string,
+): { text: string; warn: boolean } {
+  const below = headcountByMealUnit(subtree(node.id, idx));
+  const count = below.get(node.mealUnitId) ?? 0;
+  const others = [...below.values()].reduce((a, b) => a + b, 0) - count;
+  const mealUnit = node.mealUnitId ? idx.byId.get(node.mealUnitId) : undefined;
+
+  let text: string;
+  let warn: boolean;
+  if (!mealUnit) {
+    text = count > 0 ? t('org.statusNone', { count }) : t('org.statusNoneEmpty');
+    warn = count > 0;
+  } else {
+    const own = mealUnit.id === node.id;
+    const place = {
+      floor: floorName(mealUnit.resolved.floor.id),
+      canteen: canteenName(mealUnit.resolved.canteen.id),
+    };
+    const missing = missingParts(mealUnit);
+    warn = !mealUnit.mealUnitValid;
+    if (own) {
+      text = warn
+        ? t('org.statusOwnInvalid', { count, missing })
+        : t('org.statusOwn', { count, ...place });
+    } else {
+      text = warn
+        ? t('org.statusInheritedInvalid', { count, name: mealUnit.name, missing })
+        : t('org.statusInherited', { count, name: mealUnit.name, ...place });
+    }
+  }
+  if (others > 0) text = `${text} ${t('org.statusOthersBelow', { count: others })}`;
+  return { text, warn };
+}
+
+/** BR-62 / BR-63: which meal units a floor or canteen set here would reach. */
+function reachHint(node: OrgUnitView, key: 'floorId' | 'canteenId', idx: OrgTreeIndex) {
+  if (node.isMealUnit) return null;
+  const reached = mealUnitsInheriting(node.id, key, idx);
+  if (reached.length > 0) {
+    const shown = reached
+      .slice(0, 3)
+      .map((n) => n.name)
+      .join(', ');
+    const names =
+      reached.length > 3 ? t('org.andMore', { names: shown, count: reached.length - 3 }) : shown;
+    return { effective: true, text: t('org.appliesToBelow', { names }) };
+  }
+  const anyBelow = [...subtree(node.id, idx)].some((n) => n.isMealUnit);
+  return {
+    effective: false,
+    text: anyBelow ? t('org.noEffectOverridden') : t('org.noEffectNoMealUnit'),
+  };
+}
+
+function NodeDetail({ node, idx }: { node: OrgUnitView; idx: OrgTreeIndex }) {
   const qc = useQueryClient();
   const floors = useMaster('floors');
   const canteens = useMaster('canteens');
   const costCenters = useMaster('cost-centers');
+  const floorName = useMasterName('floors');
+  const canteenName = useMasterName('canteens');
   const [adminCode, setAdminCode] = useState('');
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: ['/admin/org/tree'] });
@@ -271,6 +491,7 @@ function NodeDetail({ node, byId }: { node: OrgUnitView; byId: Map<string, OrgUn
     resolvedKey: 'floor' | 'canteen' | 'costCenter',
     label: string,
     options: MasterItemView[],
+    hint: { effective: boolean; text: string } | null = null,
   ) => {
     const resolved = node.resolved[resolvedKey];
     const nameOf = (id: string | null) =>
@@ -282,15 +503,16 @@ function NodeDetail({ node, byId }: { node: OrgUnitView; byId: Map<string, OrgUn
         : resolved.id === null
           ? `${t('common.inherit')}: ${t('common.notSet')}`
           : `${t('common.inherit')}: ${nameOf(resolved.id)} (${t('common.inheritedFrom', {
-              source: byId.get(resolved.sourceNodeId ?? '')?.name ?? '',
+              source: idx.byId.get(resolved.sourceNodeId ?? '')?.name ?? '',
             })})`;
     return (
-      <div className="flex flex-col gap-2">
+      <div className={cn('flex flex-col gap-2', hint && !hint.effective && 'opacity-60')}>
         <Label htmlFor={`node-${key}`}>{label}</Label>
         <Select
           id={`node-${key}`}
           value={node.own[key] ?? ''}
           disabled={update.isPending}
+          aria-describedby={hint ? `node-${key}-hint` : undefined}
           onChange={(e) => update.mutate({ [key]: e.target.value || null })}
         >
           <option value="">{inheritLabel}</option>
@@ -302,12 +524,31 @@ function NodeDetail({ node, byId }: { node: OrgUnitView; byId: Map<string, OrgUn
               </option>
             ))}
         </Select>
+        {hint ? (
+          <p id={`node-${key}-hint`} className="text-xs text-muted-foreground">
+            {hint.text}
+          </p>
+        ) : null}
       </div>
     );
   };
 
+  const parent = node.parentId ? idx.byId.get(node.parentId) : undefined;
+  const parentMealUnit = parent?.mealUnitId ? idx.byId.get(parent.mealUnitId) : undefined;
+  const status = mealStatus(node, idx, floorName, canteenName);
+  const choices = [
+    { value: true, label: t('org.isMealUnitYes'), hint: t('org.isMealUnitYesHint') },
+    {
+      value: false,
+      label: t('org.isMealUnitNo'),
+      hint: parentMealUnit
+        ? t('org.isMealUnitNoHintParent', { name: parentMealUnit.name })
+        : t('org.isMealUnitNoHintNone'),
+    },
+  ];
+
   return (
-    <div className="flex flex-col gap-4 rounded-md border p-4">
+    <div className="flex flex-col gap-6 rounded-md border p-4">
       <div>
         <p className="font-medium">{node.name}</p>
         <p className="text-xs text-muted-foreground">
@@ -315,24 +556,57 @@ function NodeDetail({ node, byId }: { node: OrgUnitView; byId: Map<string, OrgUn
           {node.active ? '' : ` · ${t('org.inactiveNode')}`}
         </p>
       </div>
-      <label className="flex min-h-11 items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={node.isMealUnit}
-          disabled={update.isPending}
-          onChange={(e) => update.mutate({ isMealUnit: e.target.checked })}
-        />
-        {t('org.mealUnit')}
-        {node.isMealUnit && !node.mealUnitValid ? (
-          <Badge variant="error">{t('org.mealUnitInvalid')}</Badge>
-        ) : null}
-      </label>
-      {field('floorId', 'floor', t('org.floor'), floors.data?.items ?? [])}
-      {field('canteenId', 'canteen', t('org.canteen'), canteens.data?.items ?? [])}
-      {field('costCenterId', 'costCenter', t('org.costCenter'), costCenters.data?.items ?? [])}
 
-      <div className="flex flex-col gap-2">
-        <p className="text-sm font-medium">{t('org.deptAdmins')}</p>
+      <section className="flex flex-col gap-4">
+        <h3 className="font-medium">{t('org.mealSection')}</h3>
+        <fieldset className="flex flex-col gap-1" disabled={update.isPending}>
+          <legend className="mb-1 text-sm font-medium">{t('org.isMealUnitQuestion')}</legend>
+          {choices.map((c) => (
+            <label key={String(c.value)} className="flex min-h-11 items-start gap-2 py-1 text-sm">
+              <input
+                type="radio"
+                className="mt-1"
+                name={`meal-unit-${node.id}`}
+                checked={node.isMealUnit === c.value}
+                onChange={() => update.mutate({ isMealUnit: c.value })}
+              />
+              <span>
+                <span className="font-medium">{c.label}</span>
+                <span className="block text-muted-foreground">{c.hint}</span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
+        <Alert variant={status.warn ? 'warning' : 'info'}>
+          <span className="font-medium">{t('org.statusTitle')}: </span>
+          {status.text}
+        </Alert>
+        {field(
+          'floorId',
+          'floor',
+          t('org.floor'),
+          floors.data?.items ?? [],
+          reachHint(node, 'floorId', idx),
+        )}
+        {field(
+          'canteenId',
+          'canteen',
+          t('org.canteen'),
+          canteens.data?.items ?? [],
+          reachHint(node, 'canteenId', idx),
+        )}
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1">
+          <h3 className="font-medium">{t('org.costSection')}</h3>
+          <p className="text-xs text-muted-foreground">{t('org.costSectionHint')}</p>
+        </div>
+        {field('costCenterId', 'costCenter', t('org.costCenter'), costCenters.data?.items ?? [])}
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h3 className="font-medium">{t('org.deptAdmins')}</h3>
         <ul className="flex flex-col gap-1 text-sm">
           {node.deptAdmins.map((a) => (
             <li key={a.assignmentId} className="flex items-center justify-between gap-2">
@@ -363,7 +637,7 @@ function NodeDetail({ node, byId }: { node: OrgUnitView; byId: Map<string, OrgUn
             {t('common.add')}
           </Button>
         </form>
-      </div>
+      </section>
       {error ? <Alert variant="error">{apiErrorText(error)}</Alert> : null}
     </div>
   );

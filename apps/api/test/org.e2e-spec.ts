@@ -108,6 +108,16 @@ describe('org tree (BR-61, BR-62)', () => {
     const repair = items.find((u) => u.dmpCode === 'XSC-1')!;
     expect(repair.mealUnitValid).toBe(false); // BR-63: no floor anywhere above
   });
+
+  it('BR-60: every node names the meal unit its employees belong to', async () => {
+    const items: OrgUnitView[] = (await hc.get('/api/admin/org/tree').expect(200)).body.items;
+    const byCode = new Map(items.map((u) => [u.dmpCode, u]));
+    const team = byCode.get('XCT-A1')!; // Tổ Nhẫn, flagged
+    expect(team.mealUnitId).toBe(team.id);
+    expect(byCode.get('XCT-A1-1')!.mealUnitId).toBe(team.id); // its group follows it
+    const warehouse = items.find((u) => u.name === 'Kho vận')!;
+    expect(warehouse.mealUnitId).toBeNull();
+  });
 });
 
 describe('meal-unit flags and lists (BR-60, BR-63)', () => {

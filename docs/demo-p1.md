@@ -47,7 +47,7 @@ Late publish by hand (fake time, system admin session, see demo-p0 section 3): s
 
 1. While the week is a draft, sign in as `PNJP000001` and open **Đăng ký tuần** (`/week`): "Thực đơn tuần này của Nhà ăn Gò Vấp chưa được công bố."
 2. After publishing, the same page shows the serving days, meals and desserts, and "Hạn đăng ký: đến hết …".
-3. `PNJP000006` (no meal unit, BR-60) sees "Bạn chưa thuộc đơn vị nhận suất ăn nào…" instead of a menu.
+3. `PNJP000006` (no meal unit, BR-60) sees "Bạn chưa thuộc đầu mối nhận cơm nào…" instead of a menu.
 
 Automated: `menu.e2e-spec.ts` "employees see their canteen's published menu". It also maps Phòng IT to a second canteen and shows each employee only their own canteen's menu (BR-15).
 
@@ -78,7 +78,12 @@ psql "$DATABASE_URL" -c 'UPDATE "ForecastLine" SET quantity = 9'
 ## Other P1 features
 
 - **Org sync** (`/admin/org` → **Đồng bộ từ DMP**, or the pg-boss job at 02:00): with `DMP_MODE=mock` it finds nothing to change on the seed and writes a `SyncRun`, visible under **Hệ thống** (`/system`) for the system admin.
-- **Meal-unit flags and mapping** (`/admin/org`): select a node and tick "Đơn vị suất ăn", or choose a floor, canteen or cost center; "Kế thừa: … (từ …)" shows the inherited value and its source. The tabs **Chưa có đơn vị suất ăn** and **Thiếu trung tâm chi phí** are the BR-60 and BR-63 lists. Dept admins are assigned and revoked in the same panel.
+- **Meal-unit flags and mapping** (`/admin/org`; the UI calls a meal unit "Đầu mối nhận cơm"):
+  - Select a node and answer "Đơn vị này có là đầu mối nhận cơm không?". The "Hiện trạng" line updates at once. For example, Tổ Nhẫn reads "Đầu mối của 296 nhân viên, nhận cơm tại Tầng 2 · Nhà ăn Gò Vấp".
+  - Choose a floor, canteen or cost center. "Kế thừa: … (từ …)" shows the inherited value and its source, and the hint under floor/canteen names the meal units a value reaches.
+  - In the tree, nodes show "→ <đầu mối>" or a "Chưa có đầu mối" warning. "Chỉ xem đầu mối nhận cơm" lists all 13 meal units; Tổ Sửa chữa shows "Thiếu tầng".
+  - The tabs **Chưa đăng ký cơm được** and **Thiếu trung tâm chi phí** are the BR-60 and BR-63 lists.
+  - Dept admins are assigned and revoked in the same panel.
 - **Canteens, floors, cost centers** (`/admin/master`): add, edit, deactivate. Deactivating a floor that is still mapped (e.g. Tầng 1) is refused.
 - **Employees** (`/admin/employees`): filter by floor, canteen, cost center or meal status; set a cost-center override (HC and system admins); reset a PIN, which shows the temporary PIN once. A dept admin only sees employees in their units.
 - **Settings** (`/admin/settings`): every plan 6.4 key plus the caterer and unit price. Invalid values are refused, and every change is audited.
