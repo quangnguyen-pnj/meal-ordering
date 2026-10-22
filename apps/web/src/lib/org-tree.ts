@@ -81,3 +81,36 @@ export function mealUnitsInheriting(
   }
   return found;
 }
+
+export interface InheritedDeptAdmin {
+  assignmentId: string;
+  employeeCode: string;
+  name: string;
+  /** The ancestor the admin is assigned to. */
+  sourceName: string;
+}
+
+/**
+ * Dept admins of the ancestors: an assignment covers its node and everything below it, and adds
+ * to (never replaces) admins assigned lower down. Assignments on an inactive node grant nothing,
+ * and someone also assigned at the node itself is listed there only.
+ */
+export function inheritedDeptAdmins(nodeId: string, idx: OrgTreeIndex): InheritedDeptAdmin[] {
+  const node = idx.byId.get(nodeId);
+  if (!node) return [];
+  const seen = new Set(node.deptAdmins.map((a) => a.employeeCode));
+  const found: InheritedDeptAdmin[] = [];
+  for (
+    let cur = node.parentId ? idx.byId.get(node.parentId) : undefined;
+    cur;
+    cur = cur.parentId ? idx.byId.get(cur.parentId) : undefined
+  ) {
+    if (!cur.active) continue;
+    for (const a of cur.deptAdmins) {
+      if (seen.has(a.employeeCode)) continue;
+      seen.add(a.employeeCode);
+      found.push({ ...a, sourceName: cur.name });
+    }
+  }
+  return found;
+}

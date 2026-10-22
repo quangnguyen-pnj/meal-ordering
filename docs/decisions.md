@@ -114,6 +114,7 @@ Choices made while building, where the plan (`docs/plan.md`, MVP Plan v1.1) was 
   - The tree marks each node with its group: meal units show "Đầu mối nhận cơm · N người", other nodes show "→ <meal unit>", and nodes with employees but no meal unit show a warning.
   - "Chỉ xem đầu mối nhận cơm" lists every meal unit with its path, headcount, floor, canteen and validity.
   - The tree API now returns each node's effective `mealUnitId` (BR-60). Counts and reach are derived client-side in `lib/org-tree.ts`.
+- **Dept admins add up down the tree:** an assignment covers its node and everything below it (path prefix). An admin assigned lower down is added to the ones above, not swapped in. The node panel lists the admins assigned there, and separately "Quản lý từ cấp trên" with the admins of active ancestors. Those have no "Thu hồi" button; they are revoked on the node they were assigned to.
 
 ### Tooling
 

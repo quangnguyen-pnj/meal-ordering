@@ -35,6 +35,7 @@ import { apiErrorText } from '@/lib/errors';
 import {
   headcountByMealUnit,
   indexTree,
+  inheritedDeptAdmins,
   mealUnitsInheriting,
   nodePath,
   subtree,
@@ -246,19 +247,19 @@ function TreeTab() {
           )}
           <button
             type="button"
-            className="flex flex-1 flex-wrap items-center gap-2 py-1 text-left"
+            className="flex flex-1 flex-wrap justify-between items-center gap-2 py-1 "
             onClick={() => setSelectedId(n.id)}
           >
-            <span className={n.active ? undefined : 'text-muted-foreground line-through'}>
-              {n.name}
+            <span>
+              <span className="font-semibold mr-4">{n.name}</span>
+              <span className="font-mono text-xs text-muted-foreground">{n.dmpCode}</span>
             </span>
-            <span className="font-mono text-xs text-muted-foreground">{n.dmpCode}</span>
             {mealTag(n)}
-            {n.directHeadcount > 0 ? (
+            {/* {n.directHeadcount > 0 ? (
               <span className="text-xs text-muted-foreground">
                 {t('org.headcount', { count: n.directHeadcount })}
               </span>
-            ) : null}
+            ) : null} */}
           </button>
         </div>
         {kids.length > 0 && isOpen(n.id) ? (
@@ -583,6 +584,7 @@ function NodeDetail({ node, idx }: { node: OrgUnitView; idx: OrgTreeIndex }) {
   const parent = node.parentId ? idx.byId.get(node.parentId) : undefined;
   const parentMealUnit = parent?.mealUnitId ? idx.byId.get(parent.mealUnitId) : undefined;
   const status = mealStatus(node, idx, floorName, canteenName);
+  const inheritedAdmins = inheritedDeptAdmins(node.id, idx);
   const choices = [
     { value: true, label: t('org.isMealUnitYes'), hint: t('org.isMealUnitYesHint') },
     {
@@ -680,8 +682,25 @@ function NodeDetail({ node, idx }: { node: OrgUnitView; idx: OrgTreeIndex }) {
             </li>
           ))}
         </ul>
-        {node.deptAdmins.length === 0 ? (
+        {node.deptAdmins.length === 0 && inheritedAdmins.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t('org.noDeptAdmin')}</p>
+        ) : null}
+        {inheritedAdmins.length > 0 ? (
+          <div className="flex flex-col gap-1 rounded-md bg-muted/50 p-3 text-sm">
+            <p className="font-medium">{t('org.inheritedDeptAdmins')}</p>
+            <ul className="flex flex-col gap-1">
+              {inheritedAdmins.map((a) => (
+                <li key={a.assignmentId}>
+                  {a.name}{' '}
+                  <span className="font-mono text-xs text-muted-foreground">{a.employeeCode}</span>{' '}
+                  <span className="text-muted-foreground">
+                    ({t('common.inheritedFrom', { source: a.sourceName })})
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-muted-foreground">{t('org.inheritedDeptAdminsHint')}</p>
+          </div>
         ) : null}
         <form
           className="flex flex-col gap-2"

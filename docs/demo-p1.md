@@ -83,7 +83,7 @@ psql "$DATABASE_URL" -c 'UPDATE "ForecastLine" SET quantity = 9'
   - Choose a floor, canteen or cost center. "Kế thừa: … (từ …)" shows the inherited value and its source, and the hint under floor/canteen names the meal units a value reaches.
   - In the tree, nodes show "→ <đầu mối>" or a "Chưa có đầu mối" warning. "Chỉ xem đầu mối nhận cơm" lists all 13 meal units; Tổ Sửa chữa shows "Thiếu tầng".
   - The tabs **Chưa đăng ký cơm được** and **Thiếu trung tâm chi phí** are the BR-60 and BR-63 lists.
-  - Dept admins are assigned and revoked in the same panel.
+  - Dept admins are assigned and revoked in the same panel. Tổ Nhẫn shows Trần Thị Bình under "Quản lý từ cấp trên (từ Xưởng Chế tác)", since an assignment covers every unit below it.
 - **Canteens, floors, cost centers** (`/admin/master`): add, edit, deactivate. Deactivating a floor that is still mapped (e.g. Tầng 1) is refused.
 - **Employees** (`/admin/employees`): filter by floor, canteen, cost center or meal status; set a cost-center override (HC and system admins); reset a PIN, which shows the temporary PIN once. A dept admin only sees employees in their units.
 - **Settings** (`/admin/settings`): every plan 6.4 key plus the caterer and unit price. Invalid values are refused, and every change is audited.
