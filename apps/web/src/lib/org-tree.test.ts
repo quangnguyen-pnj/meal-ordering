@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   headcountByMealUnit,
   indexTree,
+  inheritedDeptAdmins,
   mealUnitsInheriting,
   nodePath,
   unassignedBelow,
@@ -85,5 +86,28 @@ describe('org tree views', () => {
 
   it('BR-61: shows the full path', () => {
     expect(nodePath('sew1', idx)).toBe('ROOT / PROD / SEW / SEW1');
+  });
+
+  it('dept admins of ancestors cover the node, nearest first, without repeats', () => {
+    const admin = (code: string) => ({ assignmentId: `a_${code}`, employeeCode: code, name: code });
+    const withAdmins = nodes.map((n) => {
+      if (n.id === 'root') return { ...n, deptAdmins: [admin('E1')] };
+      if (n.id === 'prod') return { ...n, deptAdmins: [admin('E2'), admin('E3')] };
+      if (n.id === 'sew') return { ...n, deptAdmins: [admin('E3')] };
+      return n;
+    });
+    const tree = indexTree(withAdmins);
+    expect(
+      inheritedDeptAdmins('sew1', tree).map((a) => `${a.employeeCode}@${a.sourceName}`),
+    ).toEqual(['E3@SEW', 'E2@PROD', 'E1@ROOT']);
+    // E3 is assigned at sew itself, so it is not repeated as inherited.
+    expect(inheritedDeptAdmins('sew', tree).map((a) => a.employeeCode)).toEqual(['E2', 'E1']);
+    expect(inheritedDeptAdmins('root', tree)).toEqual([]);
+
+    // An assignment on an inactive node grants nothing.
+    const inactive = indexTree(
+      withAdmins.map((n) => (n.id === 'prod' ? { ...n, active: false } : n)),
+    );
+    expect(inheritedDeptAdmins('cut', inactive).map((a) => a.employeeCode)).toEqual(['E1']);
   });
 });

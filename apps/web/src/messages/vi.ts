@@ -289,6 +289,9 @@ export const vi = {
     revokeTitle: 'Thu hồi quyền quản trị bộ phận?',
     revokeConfirm: '{name} sẽ không còn quản trị {unit}.',
     noDeptAdmin: 'Chưa có quản trị bộ phận.',
+    inheritedDeptAdmins: 'Quản lý từ cấp trên',
+    inheritedDeptAdminsHint:
+      'Quản trị của cấp trên quản lý cả đơn vị này. Muốn thu hồi, hãy chọn đơn vị đã gán.',
     autoSaved: 'Đã lưu: {field}.',
     undone: 'Đã hoàn tác.',
     selectNode: 'Chọn một đơn vị trong cây để xem và sửa.',
