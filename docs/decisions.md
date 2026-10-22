@@ -105,6 +105,15 @@ Choices made while building, where the plan (`docs/plan.md`, MVP Plan v1.1) was 
 - Screens: `/admin/dishes`, `/admin/menu`, `/admin/master`, `/admin/org`, `/admin/employees`, `/admin/settings`, `/system`, and `/week`, which shows the published menu read-only until registration arrives in P2. Other routes still use the placeholder.
 - **Menu builder:** the week draft lives in a Zustand store (`lib/menu-builder-store.ts`, unit-tested); dnd-kit drags library entries onto day columns. Every drag action also has a button (select a day, then "Thêm"), so it works with a keyboard and on a tablet. The mix warning is computed live with the shared rule.
 - The layout fetches `/api/me/banners` on every request. Notices can be dismissed.
+- **"Đầu mối nhận cơm" is the UI name for the BRQ "đơn vị suất ăn"** (product owner, 2026-10-22): admins found "đơn vị suất ăn" unclear next to every node. Code, API and docs keep "meal unit" / BR-60. The "unassigned" tab is labelled "Chưa đăng ký cơm được", since it also lists employees whose meal unit lacks a floor or canteen.
+- **`/admin/org` explains the meal-unit flag** instead of a bare checkbox:
+  - A Có/Không choice says what each answer does for the node's employees.
+  - A "Hiện trạng" line shows which meal unit the node's employees follow, where they eat, and how many cannot register.
+  - Floor and canteen hints name the meal units a value set on this node reaches. A value with no reach is dimmed, because floor and canteen are only read at meal units (BR-63).
+  - Cost center sits in its own "Chi phí" section, since it is resolved per employee.
+  - The tree marks each node with its group: meal units show "Đầu mối nhận cơm · N người", other nodes show "→ <meal unit>", and nodes with employees but no meal unit show a warning.
+  - "Chỉ xem đầu mối nhận cơm" lists every meal unit with its path, headcount, floor, canteen and validity.
+  - The tree API now returns each node's effective `mealUnitId` (BR-60). Counts and reach are derived client-side in `lib/org-tree.ts`.
 
 ### Tooling
 

@@ -204,7 +204,7 @@ export const vi = {
     closeAt: 'Hạn đăng ký: đến hết {time}',
     notPublished: 'Thực đơn tuần này của {canteen} chưa được công bố.',
     unassigned:
-      'Bạn chưa thuộc đơn vị nhận suất ăn nào nên chưa thể đăng ký. Vui lòng liên hệ phòng Hành chánh.',
+      'Bạn chưa thuộc đầu mối nhận cơm nào nên chưa thể đăng ký. Vui lòng liên hệ phòng Hành chánh.',
     noDessert: 'Không có tráng miệng',
   },
   master: {
@@ -226,18 +226,59 @@ export const vi = {
   org: {
     title: 'Cơ cấu tổ chức',
     intro:
-      'Cây tổ chức 6 cấp lấy từ DMP. Gán đơn vị nhận suất ăn, tầng, nhà ăn, trung tâm chi phí và quản trị bộ phận.',
+      'Cây tổ chức 6 cấp lấy từ DMP. Chọn đầu mối nhận cơm, gán tầng, nhà ăn, trung tâm chi phí và quản trị bộ phận.',
     tabs: {
       tree: 'Cây tổ chức',
-      unassigned: 'Chưa có đơn vị suất ăn',
+      unassigned: 'Chưa đăng ký cơm được',
       missingCostCenter: 'Thiếu trung tâm chi phí',
       importExport: 'Nhập / xuất Excel',
     },
     level: 'Cấp {level}',
-    mealUnit: 'Đơn vị suất ăn',
-    mealUnitInvalid: 'Thiếu tầng hoặc nhà ăn',
+    // "Đầu mối nhận cơm" is the UI name of the BRQ "đơn vị suất ăn" (BR-60).
+    mealUnit: 'Đầu mối nhận cơm',
+    mealUnitBadge: 'Đầu mối nhận cơm · {count} người',
+    mealUnitInvalidBadge: 'Đầu mối thiếu {missing} · {count} người',
+    noMealUnitBadge: 'Chưa có đầu mối · {count} người',
+    followsMealUnit: 'nhận cơm theo',
+    viewLabel: 'Cách xem',
+    viewTree: 'Toàn bộ cây',
+    viewMealUnits: 'Chỉ xem đầu mối nhận cơm',
+    mealUnitsSummary: '{count} đầu mối nhận cơm · {unassigned} nhân viên chưa có đầu mối',
+    mealUnitPeople: 'Số người',
+    mealUnitState: 'Tình trạng',
+    mealUnitOk: 'Hợp lệ',
+    mealUnitMissing: 'Thiếu {missing}',
+    noMealUnits: 'Chưa có đầu mối nhận cơm nào.',
+    mealSection: 'Nhận cơm',
+    isMealUnitQuestion: 'Đơn vị này có là đầu mối nhận cơm không?',
+    isMealUnitYes: 'Có',
+    isMealUnitYesHint:
+      'Nhân viên của đơn vị này và các đơn vị con nhận cơm chung, theo tầng và nhà ăn của đơn vị này. Đơn vị con nào là đầu mối riêng thì tách thành nhóm riêng.',
+    isMealUnitNo: 'Không',
+    isMealUnitNoHintParent: 'Nhân viên ở đây nhận cơm theo đầu mối cấp trên: {name}.',
+    isMealUnitNoHintNone:
+      'Cấp trên không có đầu mối nhận cơm nào, nên nhân viên ở đây sẽ chưa đăng ký cơm được.',
+    statusTitle: 'Hiện trạng',
+    statusOwn: 'Đầu mối của {count} nhân viên, nhận cơm tại {floor} · {canteen}.',
+    statusOwnInvalid: 'Đầu mối thiếu {missing}: {count} nhân viên chưa đăng ký cơm được.',
+    statusInherited:
+      '{count} nhân viên ở đây (gồm cấp dưới) nhận cơm theo đầu mối {name}, tại {floor} · {canteen}.',
+    statusInheritedInvalid:
+      '{count} nhân viên ở đây (gồm cấp dưới) theo đầu mối {name}, nhưng đầu mối này thiếu {missing} nên chưa đăng ký cơm được.',
+    statusNone:
+      '{count} nhân viên ở đây (gồm cấp dưới) chưa đăng ký cơm được: đơn vị này và cấp trên không có đầu mối nhận cơm.',
+    statusNoneEmpty:
+      'Đơn vị này và cấp trên không có đầu mối nhận cơm. Hiện chưa có nhân viên nào bị ảnh hưởng.',
+    statusOthersBelow: '{count} nhân viên khác thuộc các đầu mối riêng bên dưới.',
+    appliesToBelow: 'Áp dụng cho đầu mối bên dưới chưa tự gán: {names}.',
+    andMore: '{names} và {count} đầu mối khác',
+    noEffectNoMealUnit: 'Chưa có tác dụng: đơn vị này và cấp dưới không có đầu mối nhận cơm nào.',
+    noEffectOverridden: 'Không có tác dụng: các đầu mối bên dưới đều đã tự gán.',
+    costSection: 'Chi phí',
+    costSectionHint:
+      'Tính cho từng nhân viên, không phụ thuộc đầu mối nhận cơm. TTCP riêng của nhân viên (trang Nhân viên) được ưu tiên.',
     inactiveNode: 'Không còn trong DMP',
-    headcount: '{count} người',
+    headcount: '{count} người trực thuộc',
     floor: 'Tầng',
     canteen: 'Nhà ăn',
     costCenter: 'Trung tâm chi phí',
@@ -255,8 +296,8 @@ export const vi = {
     expandAll: 'Mở hết',
     collapseAll: 'Thu gọn',
     filterTree: 'Lọc theo tên hoặc mã đơn vị',
-    reasonNoMealUnit: 'Không có đơn vị suất ăn phía trên',
-    reasonInvalid: 'Đơn vị suất ăn thiếu {missing}',
+    reasonNoMealUnit: 'Chưa có đầu mối nhận cơm ở đơn vị này hoặc cấp trên',
+    reasonInvalid: 'Đầu mối nhận cơm thiếu {missing}',
     missingParts: { floor: 'tầng', canteen: 'nhà ăn' },
     emptyList: 'Không có nhân viên nào.',
     path: 'Đơn vị',
@@ -298,7 +339,7 @@ export const vi = {
       CANTEEN_UNKNOWN: 'Không có nhà ăn này hoặc đã ngưng dùng',
       COST_CENTER_UNKNOWN: 'Không có trung tâm chi phí này hoặc đã ngưng dùng',
       EMPLOYEE_FLOOR_OR_CANTEEN:
-        'Nhân viên chỉ gán trung tâm chi phí; tầng và nhà ăn theo đơn vị suất ăn',
+        'Nhân viên chỉ gán trung tâm chi phí; tầng và nhà ăn theo đầu mối nhận cơm',
       DUPLICATE_TARGET: 'Trùng với một dòng phía trên',
     } satisfies Record<MappingRowErrorCode, string>,
     fileErrors: {
@@ -311,14 +352,14 @@ export const vi = {
   },
   employees: {
     title: 'Nhân viên',
-    intro: 'Tìm nhân viên trong phạm vi bạn quản lý, xem đơn vị suất ăn và cấp lại mã PIN.',
+    intro: 'Tìm nhân viên trong phạm vi bạn quản lý, xem đầu mối nhận cơm và cấp lại mã PIN.',
     filters: 'Bộ lọc',
     orgUnit: 'Đơn vị (gồm cấp dưới)',
     mealStatus: 'Tình trạng suất ăn',
     mealStatuses: {
       OK: 'Hợp lệ',
-      NO_MEAL_UNIT: 'Chưa có đơn vị suất ăn',
-      INVALID_MEAL_UNIT: 'Đơn vị suất ăn thiếu tầng/nhà ăn',
+      NO_MEAL_UNIT: 'Chưa có đầu mối nhận cơm',
+      INVALID_MEAL_UNIT: 'Đầu mối thiếu tầng/nhà ăn',
     },
     status: { ACTIVE: 'Đang làm', LEFT: 'Đã nghỉ' },
     roles: 'Vai trò',
