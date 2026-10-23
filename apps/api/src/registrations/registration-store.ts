@@ -7,7 +7,7 @@ import {
   mealDisplayName,
   mondayOf,
   resolveEmployeeMealAssignment,
-  type DishType,
+  type DishTypeLabel,
   type EmployeeMealAssignment,
   type MyDayView,
   type SelectionLine,
@@ -31,7 +31,17 @@ const WEEK_INCLUDE = {
       items: {
         where: { removedAt: null, session: SESSION },
         orderBy: { sortOrder: 'asc' },
-        include: { dish: { select: { name: true, type: true } } },
+        include: {
+          dish: { select: { name: true, type: true } },
+          // BR-14: the items this one replaced, for the red "dish changed" note.
+          replaces: {
+            select: {
+              id: true,
+              removedAt: true,
+              dish: { select: { name: true, type: { select: { name: true } } } },
+            },
+          },
+        },
       },
       desserts: {
         where: { removedAt: null },
@@ -45,7 +55,9 @@ const WEEK_INCLUDE = {
 export interface LoadedItem {
   id: string;
   displayName: string;
-  type: DishType;
+  type: DishTypeLabel;
+  /** BR-14: items whose dish this one replaced, with when they were replaced. */
+  replaced: Array<{ id: string; displayName: string; removedAt: Date | null }>;
 }
 
 export interface LoadedDay {
@@ -78,6 +90,8 @@ export interface RegRow {
   quantity: number;
   status: RegistrationStatus;
   isExtra: boolean;
+  /** BR-14: set when the HC admin replaced the dish and this meal moved with it. */
+  replacedFromItemId: string | null;
 }
 
 export const REG_ROW_SELECT = {
@@ -88,6 +102,7 @@ export const REG_ROW_SELECT = {
   quantity: true,
   status: true,
   isExtra: true,
+  replacedFromItemId: true,
 } satisfies Prisma.RegistrationSelect;
 
 /** Quantities by menu item; only positive active quantities count as meals (BR-20). */
@@ -132,8 +147,13 @@ export class RegistrationStore {
         isServing: d.isServing,
         items: d.items.map((i) => ({
           id: i.id,
-          displayName: mealDisplayName(i.dish.type, i.dish.name),
-          type: i.dish.type,
+          displayName: mealDisplayName(i.dish.type.name, i.dish.name),
+          type: { id: i.dish.type.id, name: i.dish.type.name, color: i.dish.type.color },
+          replaced: i.replaces.map((r) => ({
+            id: r.id,
+            displayName: mealDisplayName(r.dish.type.name, r.dish.name),
+            removedAt: r.removedAt,
+          })),
         })),
         desserts: d.desserts.map((x) => x.dessert.name),
       })),
@@ -172,7 +192,7 @@ export class RegistrationStore {
           status: true,
           orgUnitId: true,
           endDate: true,
-          costCenterOverrideId: true,
+          floorOverrideId: true,
           dmpCostCenterCode: true,
         },
       }),
@@ -186,7 +206,7 @@ export class RegistrationStore {
       endDate: e.endDate,
       assignment: resolveEmployeeMealAssignment({
         orgUnitId: e.orgUnitId,
-        costCenterOverrideId: e.costCenterOverrideId,
+        floorOverrideId: e.floorOverrideId,
         dmpCostCenterId: e.dmpCostCenterCode ? (ccByCode.get(e.dmpCostCenterCode) ?? null) : null,
         index: tree.index,
       }),
@@ -377,6 +397,7 @@ export class RegistrationStore {
         type: i.type,
         quantity: current[i.id] ?? 0,
         forecast: forecast?.[i.id] ?? 0,
+        replacedAfterClose: replacedAfterClose(week, i, args.rows),
       })),
       needsReselect: args.rows
         .filter((r) => r.status === 'NEEDS_RESELECT' && r.quantity > 0)
@@ -388,6 +409,26 @@ export class RegistrationStore {
       extra: args.rows.some((r) => r.isExtra && r.status === 'ACTIVE' && r.quantity > 0),
     };
   }
+}
+
+/**
+ * BR-14 (product owner, 2026-10-23): when the HC admin replaces a dish after closeAt, an employee
+ * whose meal moved to the new dish sees a red note naming the dish they had chosen. Only that
+ * employee: someone who picks the new dish themselves gets no note.
+ */
+export function replacedAfterClose(
+  week: Pick<LoadedWeek, 'closeAt'>,
+  item: LoadedItem,
+  rows: readonly RegRow[],
+): { from: string } | null {
+  if (!week.closeAt) return null;
+  const closeAt = week.closeAt.getTime();
+  for (const r of rows) {
+    if (r.menuItemId !== item.id || r.status !== 'ACTIVE' || r.quantity <= 0) continue;
+    const from = item.replaced.find((x) => x.id === r.replacedFromItemId);
+    if (from?.removedAt && from.removedAt.getTime() >= closeAt) return { from: from.displayName };
+  }
+  return null;
 }
 
 /** Positive quantities of ACTIVE rows by menu item. */

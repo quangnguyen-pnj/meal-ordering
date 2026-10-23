@@ -50,9 +50,9 @@ export class MappingImportService {
         include: { floor: true, canteen: true, costCenter: true },
       }),
       this.prisma.employee.findMany({
-        where: { orgUnit: { factoryId }, costCenterOverrideId: { not: null } },
+        where: { orgUnit: { factoryId }, floorOverrideId: { not: null } },
         orderBy: { employeeCode: 'asc' },
-        include: { costCenterOverride: true },
+        include: { floorOverride: true },
       }),
       this.prisma.floor.findMany({ where: { factoryId }, orderBy: { sortOrder: 'asc' } }),
       this.prisma.canteen.findMany({ where: { factoryId }, orderBy: { code: 'asc' } }),
@@ -75,7 +75,7 @@ export class MappingImportService {
       ]);
     }
     for (const e of employees) {
-      sheet.addRow(['EMPLOYEE', e.employeeCode, e.name, '', '', e.costCenterOverride?.code ?? '']);
+      sheet.addRow(['EMPLOYEE', e.employeeCode, e.name, e.floorOverride?.code ?? '', '', '']);
     }
 
     const lists = wb.addWorksheet('Danh mục');
@@ -253,19 +253,19 @@ export class MappingImportService {
             await tx.employee.update({
               where: { id: employee.id },
               data: {
-                costCenterOverrideId: c.after.costCenterCode
-                  ? lookups.ids.costCenter.get(c.after.costCenterCode)!
+                floorOverrideId: c.after.floorCode
+                  ? lookups.ids.floor.get(c.after.floorCode)!
                   : null,
               },
             });
             await this.audit.log(
               {
                 actorId,
-                action: 'employee.costCenterOverride.set',
+                action: 'employee.floorOverride.set',
                 entityType: 'Employee',
                 entityId: employee.id,
-                before: { costCenterCode: c.before.costCenterCode },
-                after: { costCenterCode: c.after.costCenterCode },
+                before: { floorCode: c.before.floorCode },
+                after: { floorCode: c.after.floorCode },
                 reason: `Import ${imp.fileName} (${imp.id}), row ${c.rowNumber}`,
               },
               tx,
@@ -315,7 +315,7 @@ export class MappingImportService {
         const employee = lookups.employees.get(r.code);
         if (!employee) continue;
         name = employee.name;
-        before = { floorCode: null, canteenCode: null, costCenterCode: employee.costCenterCode };
+        before = { floorCode: employee.floorCode, canteenCode: null, costCenterCode: null };
       }
       if (
         before.floorCode !== after.floorCode ||
@@ -350,7 +350,7 @@ export class MappingImportService {
           id: true,
           employeeCode: true,
           name: true,
-          costCenterOverride: { select: { code: true } },
+          floorOverride: { select: { code: true } },
         },
       }),
       db.floor.findMany({ where: { factoryId }, select: { id: true, code: true, active: true } }),
@@ -380,7 +380,7 @@ export class MappingImportService {
       employees: new Map(
         employees.map((e) => [
           e.employeeCode,
-          { id: e.id, name: e.name, costCenterCode: e.costCenterOverride?.code ?? null },
+          { id: e.id, name: e.name, floorCode: e.floorOverride?.code ?? null },
         ]),
       ),
       activeCodes: {
@@ -395,7 +395,7 @@ export class MappingImportService {
 
 interface Lookups {
   units: Map<string, { id: string; name: string } & CodeTriple>;
-  employees: Map<string, { id: string; name: string; costCenterCode: string | null }>;
+  employees: Map<string, { id: string; name: string; floorCode: string | null }>;
   activeCodes: { floor: Set<string>; canteen: Set<string>; costCenter: Set<string> };
   ids: {
     floor: Map<string, string>;

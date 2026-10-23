@@ -19,10 +19,13 @@ export type OrgUnitUpdate = z.infer<typeof OrgUnitUpdateSchema>;
 
 export const AssignDeptAdminSchema = z.object({ employeeCode: EmployeeCodeSchema });
 
-/** BR-63: employee-level cost-center override (null clears it). */
-export const CostCenterOverrideSchema = z.object({
-  costCenterId: NullableId,
-  reason: z.string().trim().max(500).optional(),
+/**
+ * BR-63: the floor one employee picks up their meal on (null goes back to the meal unit's floor).
+ * Replaces the cost-center override (2026-10-23): cost center now follows the org tree.
+ */
+export const FloorOverrideSchema = z.object({
+  floorId: NullableId,
+  reason: z.string().trim().min(1).max(500),
 });
 
 export const PrivilegedRoleSchema = z.object({
@@ -70,12 +73,15 @@ export interface EmployeeMappingView {
   missing: Array<'floor' | 'canteen'>;
   floorId: string | null;
   floorName: string | null;
+  /** OVERRIDE: the HC admin set this employee's pick-up floor (`floorOverrideId`). */
+  floorSource: 'MEAL_UNIT' | 'OVERRIDE' | null;
+  floorOverrideId: string | null;
   canteenId: string | null;
   canteenName: string | null;
   costCenterId: string | null;
   costCenterName: string | null;
-  costCenterSource: 'OVERRIDE' | 'MAPPING' | 'DMP' | null;
-  costCenterOverrideId: string | null;
+  /** Cost center follows the org tree (MAPPING); DMP is the default when no node has one. */
+  costCenterSource: 'MAPPING' | 'DMP' | null;
   roles: string[];
 }
 

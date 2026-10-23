@@ -3,36 +3,85 @@ import { defaultSettingValue } from '../settings';
 import {
   checkMenuMix,
   isDefaultServingDay,
+  libraryNameKey,
   mealDisplayName,
+  menuDayGaps,
   menuWeekDates,
+  menuWeekGaps,
+  normalizeLibraryName,
   planMenuDayEdit,
+  type MenuMixRule,
 } from './menu';
 
 describe('BR-12: meal display name', () => {
   it('BR-12: is the type in brackets, then the dish name', () => {
-    expect(mealDisplayName('CHAY', 'Gạo lứt muối mè')).toBe('[Chay] Gạo lứt muối mè');
-    expect(mealDisplayName('MAN', 'Cá kho tộ')).toBe('[Mặn] Cá kho tộ');
-    expect(mealDisplayName('CHAO', ' Cháo gà ')).toBe('[Cháo] Cháo gà');
+    expect(mealDisplayName('Chay', 'Gạo lứt muối mè')).toBe('[Chay] Gạo lứt muối mè');
+    expect(mealDisplayName('Mặn', 'Cá kho tộ')).toBe('[Mặn] Cá kho tộ');
+    expect(mealDisplayName('Eat clean', ' Ức gà áp chảo ')).toBe('[Eat clean] Ức gà áp chảo');
+  });
+});
+
+describe('BR-10: library names', () => {
+  it('BR-10: names are trimmed with single spaces and compared without case', () => {
+    expect(normalizeLibraryName('  Cá   kho  tộ ')).toBe('Cá kho tộ');
+    expect(libraryNameKey('CÁ KHO TỘ')).toBe(libraryNameKey(' cá kho  tộ'));
+    expect(libraryNameKey('Cá kho')).not.toBe(libraryNameKey('Cá kho tộ'));
   });
 });
 
 describe('BR-13: usual menu mix', () => {
+  const rules: MenuMixRule[] = [
+    { typeId: 'chay', typeName: 'Chay', minPerDay: 1, maxPerDay: 1 },
+    { typeId: 'chao', typeName: 'Cháo', minPerDay: 1, maxPerDay: 1 },
+    { typeId: 'man', typeName: 'Mặn', minPerDay: 2, maxPerDay: 3 },
+    { typeId: 'clean', typeName: 'Eat clean', minPerDay: null, maxPerDay: null },
+  ];
+
   it('BR-13: 1 Chay + 1 Cháo + 2 or 3 Mặn is the usual mix', () => {
-    expect(checkMenuMix(['CHAY', 'CHAO', 'MAN', 'MAN']).usual).toBe(true);
-    expect(checkMenuMix(['MAN', 'CHAY', 'MAN', 'CHAO', 'MAN']).usual).toBe(true);
+    expect(checkMenuMix(['chay', 'chao', 'man', 'man'], rules).usual).toBe(true);
+    expect(checkMenuMix(['man', 'chay', 'man', 'chao', 'man'], rules).usual).toBe(true);
   });
 
   it('BR-13: a different mix reports what is off', () => {
-    const check = checkMenuMix(['MAN', 'MAN', 'MAN', 'MAN', 'CHAY']);
+    const check = checkMenuMix(['man', 'man', 'man', 'man', 'chay'], rules);
     expect(check.usual).toBe(false);
     expect(check.issues).toEqual([
-      { type: 'CHAO', actual: 0, min: 1, max: 1 },
-      { type: 'MAN', actual: 4, min: 2, max: 3 },
+      { typeId: 'chao', typeName: 'Cháo', actual: 0, min: 1, max: 1 },
+      { typeId: 'man', typeName: 'Mặn', actual: 4, min: 2, max: 3 },
     ]);
   });
 
-  it('BR-13: an empty day is unusual too', () => {
-    expect(checkMenuMix([]).issues).toHaveLength(3);
+  it('BR-13: a type without bounds is never an issue, and an empty day is unusual', () => {
+    expect(checkMenuMix(['chay', 'chao', 'man', 'man', 'clean', 'clean'], rules).usual).toBe(true);
+    expect(checkMenuMix([], rules).issues).toHaveLength(3);
+  });
+
+  it('BR-13: only one bound can be set', () => {
+    const atMostOne = [{ typeId: 'clean', typeName: 'Eat clean', minPerDay: null, maxPerDay: 1 }];
+    expect(checkMenuMix([], atMostOne).usual).toBe(true);
+    expect(checkMenuMix(['clean', 'clean'], atMostOne).issues[0]).toMatchObject({ actual: 2 });
+  });
+});
+
+describe('publishing needs a main dish and a dessert on every serving day', () => {
+  it('a serving day lacking either is reported; a day off never is', () => {
+    expect(menuDayGaps({ isServing: true, mainCount: 2, dessertCount: 1 })).toEqual([]);
+    expect(menuDayGaps({ isServing: true, mainCount: 0, dessertCount: 0 })).toEqual([
+      'MAIN',
+      'DESSERT',
+    ]);
+    expect(menuDayGaps({ isServing: true, mainCount: 3, dessertCount: 0 })).toEqual(['DESSERT']);
+    expect(menuDayGaps({ isServing: false, mainCount: 0, dessertCount: 0 })).toEqual([]);
+  });
+
+  it('lists only the days that block publishing', () => {
+    expect(
+      menuWeekGaps([
+        { date: '2026-11-02', isServing: true, mainCount: 4, dessertCount: 1 },
+        { date: '2026-11-03', isServing: true, mainCount: 0, dessertCount: 1 },
+        { date: '2026-11-07', isServing: false, mainCount: 0, dessertCount: 0 },
+      ]),
+    ).toEqual([{ date: '2026-11-03', gaps: ['MAIN'] }]);
   });
 });
 

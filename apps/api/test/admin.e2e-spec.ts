@@ -144,24 +144,49 @@ describe('/admin/employees: finder and cost-center override (BR-63)', () => {
     );
   });
 
-  it('BR-63: the override wins over the inherited cost center, is audited and can be cleared', async () => {
-    const find = async () =>
-      (await hc.get(`/api/employees?q=${DEMO.employee}`).expect(200)).body.items[0];
-    expect(await find()).toMatchObject({ costCenterId: 'cc_CC03', costCenterSource: 'MAPPING' });
+  it('BR-63: cost center follows the org tree; the HC admin sets a pick-up floor with a reason, audited', async () => {
+    // Xưởng Kim hoàn: org.e2e-spec changes the production mapping while this file runs.
+    const OTHER = 'PNJP000868';
+    const find = async () => (await hc.get(`/api/employees?q=${OTHER}`).expect(200)).body.items[0];
+    const before = await find();
+    expect(before).toMatchObject({ costCenterSource: 'MAPPING', floorSource: 'MEAL_UNIT' });
+    await hc.put(`/api/employees/${OTHER}/floor-override`).send({ floorId: 'fl_T1' }).expect(400); // a reason is required
     await hc
-      .put(`/api/employees/${DEMO.employee}/cost-center-override`)
-      .send({ costCenterId: 'cc_CC10', reason: 'Biệt phái' })
+      .put(`/api/employees/${OTHER}/floor-override`)
+      .send({ floorId: 'fl_T1', reason: 'Ngồi ở tầng 1' })
       .expect(200);
-    expect(await find()).toMatchObject({ costCenterId: 'cc_CC10', costCenterSource: 'OVERRIDE' });
+    expect(await find()).toMatchObject({
+      floorId: 'fl_T1',
+      floorSource: 'OVERRIDE',
+      floorOverrideId: 'fl_T1',
+      costCenterId: before.costCenterId, // the pick-up floor never moves the cost
+    });
+    // Filtering by floor finds the moved employee there.
+    const onT1 = await hc.get(`/api/employees?floorId=fl_T1&q=${OTHER}`).expect(200);
+    expect(onT1.body.total).toBe(1);
     await hc
-      .put(`/api/employees/${DEMO.employee}/cost-center-override`)
-      .send({ costCenterId: null })
+      .put(`/api/employees/${OTHER}/floor-override`)
+      .send({ floorId: null, reason: 'Về lại tầng của đơn vị' })
       .expect(200);
-    expect(await find()).toMatchObject({ costCenterSource: 'MAPPING' });
+    expect(await find()).toMatchObject({ floorId: before.floorId, floorSource: 'MEAL_UNIT' });
     const audits = await db().auditLog.findMany({
-      where: { action: 'employee.costCenterOverride.set', reason: 'Biệt phái' },
+      where: {
+        action: 'employee.floorOverride.set',
+        reason: 'Ngồi ở tầng 1',
+        entityId: (await db().employee.findUniqueOrThrow({ where: { employeeCode: OTHER } })).id,
+      },
     });
     expect(audits).toHaveLength(1);
+    expect(audits[0]!.after).toEqual({ floorCode: 'T1' });
+  });
+
+  it('Khối / Trung tâm / Phòng ban filter options follow the scope', async () => {
+    const all = (await hc.get('/api/employees/org-units').expect(200)).body.items;
+    expect(all[0]).toMatchObject({ level: 1, parentId: null });
+    expect(all.some((o: { levelName: string }) => o.levelName === 'Khối')).toBe(true);
+    const mine = (await deptProd.get('/api/employees/org-units').expect(200)).body.items;
+    expect(mine.length).toBeLessThan(all.length);
+    expect(mine[0]).toMatchObject({ id: 'ou_XCT' });
   });
 
   it('a dept admin finds employees in scope only and may not set overrides', async () => {
@@ -170,8 +195,8 @@ describe('/admin/employees: finder and cost-center override (BR-63)', () => {
       res.body.items.every((e: { orgPath: string }) => e.orgPath.includes('Xưởng Chế tác')),
     ).toBe(true);
     await deptProd
-      .put(`/api/employees/${DEMO.employee}/cost-center-override`)
-      .send({ costCenterId: null })
+      .put(`/api/employees/${DEMO.employee}/floor-override`)
+      .send({ floorId: null, reason: 'x' })
       .expect(403);
   });
 });

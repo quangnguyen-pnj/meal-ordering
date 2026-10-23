@@ -12,12 +12,14 @@ import {
   DEMO,
   SEED_CANTEEN,
   SEED_COST_CENTERS,
+  SEED_DISH_TYPES,
   SEED_FACTORY,
   SEED_FLOORS,
   SEED_ROLE_ASSIGNMENTS,
   SEED_SUPPLIER,
   buildEmployees,
   buildOrgTree,
+  dishTypeId,
   orgUnitId,
   toRuleNodes,
 } from '../../src/seed-data';
@@ -69,6 +71,10 @@ async function main(): Promise<void> {
     update: {},
     create: { ...SEED_CANTEEN, factoryId, supplierId: SEED_SUPPLIER.id },
   });
+  await prisma.dishType.createMany({
+    data: SEED_DISH_TYPES.map((d) => ({ ...d, id: dishTypeId(d.code, factoryId), factoryId })),
+    skipDuplicates: true,
+  });
   await prisma.floor.createMany({
     data: SEED_FLOORS.map((f) => ({ ...f, factoryId })),
     skipDuplicates: true,
@@ -98,7 +104,6 @@ async function main(): Promise<void> {
       email: e.email,
       orgUnitId: e.orgUnitId,
       mealUnitId: resolveMealUnitId(e.orgUnitId, index),
-      costCenterOverrideId: e.costCenterOverrideId,
       dmpCostCenterCode: e.dmpCostCenterCode,
       startDate: new Date(`${e.startDate}T00:00:00.000Z`),
       pinHash,

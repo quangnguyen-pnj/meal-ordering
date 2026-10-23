@@ -1,4 +1,3 @@
-import type { DishType } from '../enums';
 import { dayLockAt } from './deadlines';
 import { addDays, vnToUtc, type DateString } from './time';
 

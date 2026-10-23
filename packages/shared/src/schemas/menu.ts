@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import type { DishType, MenuWeekStatus } from '../enums';
+import type { MenuWeekStatus } from '../enums';
+import type { DishTypeLabel } from './master';
 import type { MenuMixCheck } from '../rules/menu';
 import { parseDateString } from '../rules/time';
 
@@ -41,7 +42,7 @@ export interface MenuItemView {
   id: string;
   dishId: string;
   dishName: string;
-  type: DishType;
+  type: DishTypeLabel;
   /** BR-12 */
   displayName: string;
 }

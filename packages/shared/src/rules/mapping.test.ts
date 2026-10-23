@@ -125,16 +125,8 @@ describe('BR-63: meal unit validity', () => {
 });
 
 describe('BR-63: employee cost center', () => {
-  it('BR-63: the employee-level override wins over the inherited mapping', () => {
-    expect(
-      resolveEmployeeCostCenter({ orgUnitId: 'L6', overrideCostCenterId: 'K9', index }),
-    ).toEqual({ costCenterId: 'K9', source: 'OVERRIDE' });
-  });
-
-  it('BR-63: without an override the inherited mapping applies', () => {
-    expect(
-      resolveEmployeeCostCenter({ orgUnitId: 'L6', overrideCostCenterId: null, index }),
-    ).toEqual({
+  it('BR-63: the cost center follows the org tree: the nearest node with one applies', () => {
+    expect(resolveEmployeeCostCenter({ orgUnitId: 'L6', index })).toEqual({
       costCenterId: 'K1',
       source: 'MAPPING',
     });
@@ -144,7 +136,6 @@ describe('BR-63: employee cost center', () => {
     expect(
       resolveEmployeeCostCenter({
         orgUnitId: 'L6',
-        overrideCostCenterId: null,
         dmpCostCenterId: 'K5',
         index,
       }),
@@ -155,17 +146,14 @@ describe('BR-63: employee cost center', () => {
     expect(
       resolveEmployeeCostCenter({
         orgUnitId: 'L2x',
-        overrideCostCenterId: null,
         dmpCostCenterId: 'K5',
         index,
       }),
     ).toEqual({ costCenterId: 'K5', source: 'DMP' });
   });
 
-  it('BR-63: no override, mapping or DMP value leaves the cost center empty', () => {
-    expect(
-      resolveEmployeeCostCenter({ orgUnitId: 'L2x', overrideCostCenterId: null, index }),
-    ).toEqual({
+  it('BR-63: no mapping or DMP value leaves the cost center empty', () => {
+    expect(resolveEmployeeCostCenter({ orgUnitId: 'L2x', index })).toEqual({
       costCenterId: null,
       source: null,
     });
@@ -175,7 +163,7 @@ describe('BR-63: employee cost center', () => {
 describe('BR-60/BR-63: employee meal assignment', () => {
   it('BR-60: a registrable employee gets meal unit, floor, canteen and cost center', () => {
     expect(
-      resolveEmployeeMealAssignment({ orgUnitId: 'L6', costCenterOverrideId: null, index }),
+      resolveEmployeeMealAssignment({ orgUnitId: 'L6', floorOverrideId: null, index }),
     ).toMatchObject({
       mealUnitId: 'L4',
       status: 'OK',
@@ -189,13 +177,13 @@ describe('BR-60/BR-63: employee meal assignment', () => {
 
   it('BR-60: an employee with no meal unit above is unassigned and cannot register', () => {
     expect(
-      resolveEmployeeMealAssignment({ orgUnitId: 'L4b', costCenterOverrideId: null, index }),
+      resolveEmployeeMealAssignment({ orgUnitId: 'L4b', floorOverrideId: null, index }),
     ).toMatchObject({ mealUnitId: null, status: 'NO_MEAL_UNIT', canRegister: false });
   });
 
   it('BR-63: an employee under an invalid meal unit is unassigned and cannot register', () => {
     expect(
-      resolveEmployeeMealAssignment({ orgUnitId: 'L2x', costCenterOverrideId: null, index }),
+      resolveEmployeeMealAssignment({ orgUnitId: 'L2x', floorOverrideId: null, index }),
     ).toMatchObject({
       mealUnitId: 'L2x',
       status: 'INVALID_MEAL_UNIT',
@@ -205,13 +193,35 @@ describe('BR-60/BR-63: employee meal assignment', () => {
     });
   });
 
+  it('BR-63: an HC admin can move one employee to another pick-up floor', () => {
+    expect(
+      resolveEmployeeMealAssignment({ orgUnitId: 'L6', floorOverrideId: 'F9', index }),
+    ).toMatchObject({
+      mealUnitId: 'L4',
+      status: 'OK',
+      floorId: 'F9',
+      floorSource: 'OVERRIDE',
+      canteenId: 'C1',
+      canRegister: true,
+    });
+    expect(
+      resolveEmployeeMealAssignment({ orgUnitId: 'L6', floorOverrideId: null, index }),
+    ).toMatchObject({ floorId: 'F2', floorSource: 'MEAL_UNIT' });
+  });
+
+  it('BR-63: an employee floor does not give a canteen; the meal unit still needs one', () => {
+    expect(
+      resolveEmployeeMealAssignment({ orgUnitId: 'L2x', floorOverrideId: 'F9', index }),
+    ).toMatchObject({ status: 'INVALID_MEAL_UNIT', missing: ['canteen'], canRegister: false });
+  });
+
   it('BR-63: an employee without a cost center can still register', () => {
     const noCost = indexOrgNodes([
       node('r', null, { canteenId: 'C1', floorId: 'F1', isMealUnit: true }),
       node('e', 'r'),
     ]);
     expect(
-      resolveEmployeeMealAssignment({ orgUnitId: 'e', costCenterOverrideId: null, index: noCost }),
+      resolveEmployeeMealAssignment({ orgUnitId: 'e', floorOverrideId: null, index: noCost }),
     ).toMatchObject({ canRegister: true, missingCostCenter: true, costCenterId: null });
   });
 });

@@ -4,6 +4,8 @@ import {
   resolveEmployeeMealAssignment,
   resolveMealUnitId,
   type EmployeeMappingView,
+  type ListScope,
+  type OrgFilterOption,
   type OrgNodeIndex,
 } from '@meal/shared';
 
@@ -95,7 +97,7 @@ export interface EmployeeForMapping {
   name: string;
   status: 'ACTIVE' | 'LEFT';
   orgUnitId: string;
-  costCenterOverrideId: string | null;
+  floorOverrideId: string | null;
   dmpCostCenterCode: string | null;
   roleAssignments: Array<{ role: string }>;
 }
@@ -105,7 +107,7 @@ export const EMPLOYEE_FOR_MAPPING_SELECT = {
   name: true,
   status: true,
   orgUnitId: true,
-  costCenterOverrideId: true,
+  floorOverrideId: true,
   dmpCostCenterCode: true,
   roleAssignments: { where: { revokedAt: null }, select: { role: true } },
 } satisfies Prisma.EmployeeSelect;
@@ -123,7 +125,7 @@ export function describeEmployees(
   return employees.map((e) => {
     const a = resolveEmployeeMealAssignment({
       orgUnitId: e.orgUnitId,
-      costCenterOverrideId: e.costCenterOverrideId,
+      floorOverrideId: e.floorOverrideId,
       dmpCostCenterId: e.dmpCostCenterCode
         ? (costCenterIdByCode.get(e.dmpCostCenterCode) ?? null)
         : null,
@@ -141,12 +143,13 @@ export function describeEmployees(
       missing: a.missing,
       floorId: a.floorId,
       floorName: a.floorId ? (names.get(a.floorId) ?? null) : null,
+      floorSource: a.floorSource,
+      floorOverrideId: e.floorOverrideId,
       canteenId: a.canteenId,
       canteenName: a.canteenId ? (names.get(a.canteenId) ?? null) : null,
       costCenterId: a.costCenterId,
       costCenterName: a.costCenterId ? (names.get(a.costCenterId) ?? null) : null,
       costCenterSource: a.costCenterSource,
-      costCenterOverrideId: e.costCenterOverrideId,
       roles: ['EMPLOYEE', ...new Set(e.roleAssignments.map((r) => r.role))],
     };
   });
@@ -175,4 +178,32 @@ export async function loadMasterNames(db: Db, factoryId: string): Promise<Master
     ...canteens.map((c) => [c.id, c.name] as const),
     ...costCenters.map((c) => [c.id, `${c.code} · ${c.name}`] as const),
   ]);
+}
+
+/**
+ * Org nodes a caller may filter by (Khối / Trung tâm / Phòng ban filters, 2026-10-23): active
+ * nodes inside the caller's list scope, in tree order. A dept admin sees only their own subtree.
+ */
+export function orgFilterOptions(org: OrgSnapshot, scope: ListScope): OrgFilterOption[] {
+  const inScope = (path: string) => {
+    switch (scope.kind) {
+      case 'all':
+      case 'factories':
+        return true;
+      case 'paths':
+        return scope.paths.some((p) => path.startsWith(p));
+      default:
+        return false;
+    }
+  };
+  return org.nodes
+    .filter((n) => n.active && inScope(n.path))
+    .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name, 'vi'))
+    .map((n) => ({
+      id: n.id,
+      name: n.name,
+      parentId: n.parentId,
+      level: n.level,
+      levelName: n.dmpLevelName,
+    }));
 }

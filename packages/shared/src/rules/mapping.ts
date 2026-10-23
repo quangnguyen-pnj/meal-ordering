@@ -5,8 +5,9 @@
  *   that has one.
  * - BR-60: an employee belongs to the nearest meal-unit node at or above their own node.
  * - BR-63: floor and canteen come from the employee's meal unit; a meal unit that resolves no
- *   floor or no canteen is invalid. Cost center is resolved per employee: override, else the
- *   inherited mapping, else the value supplied by DMP.
+ *   floor or no canteen is invalid. An HC admin may set the floor where one employee picks up
+ *   their meal (product owner, 2026-10-23). Cost center follows the org tree: the inherited
+ *   mapping, else the value supplied by DMP.
  */
 
 export interface OrgNode {
@@ -102,7 +103,7 @@ export function resolveMealUnitMapping(mealUnitId: string, index: OrgNodeIndex):
   return { valid: false, missing };
 }
 
-export type CostCenterResolutionSource = 'OVERRIDE' | 'MAPPING' | 'DMP';
+export type CostCenterResolutionSource = 'MAPPING' | 'DMP';
 
 export interface ResolvedCostCenter {
   costCenterId: string | null;
@@ -110,19 +111,16 @@ export interface ResolvedCostCenter {
 }
 
 /**
- * BR-63 / BR-62: cost center is resolved per employee.
- * Order: employee-level override, then the inherited org mapping (an admin mapping overrides
- * what DMP supplies), then the cost center DMP supplied for the employee as the default.
+ * BR-63 / BR-62: an employee's cost center follows the org tree (product owner, 2026-10-23): each
+ * centre or department has its own cost center, and every cost of its employees (meals included)
+ * adds up there. Order: the nearest node at or above the employee that has one, then the cost
+ * center DMP supplied for the employee as the default. There is no per-employee override any more.
  */
 export function resolveEmployeeCostCenter(args: {
   orgUnitId: string;
-  overrideCostCenterId: string | null;
   dmpCostCenterId?: string | null;
   index: OrgNodeIndex;
 }): ResolvedCostCenter {
-  if (args.overrideCostCenterId !== null) {
-    return { costCenterId: args.overrideCostCenterId, source: 'OVERRIDE' };
-  }
   const inherited = resolveMapping(args.orgUnitId, 'costCenterId', args.index);
   if (inherited.value !== null) return { costCenterId: inherited.value, source: 'MAPPING' };
   if (args.dmpCostCenterId) return { costCenterId: args.dmpCostCenterId, source: 'DMP' };
@@ -138,6 +136,8 @@ export interface EmployeeMealAssignment {
   /** Which of floor/canteen the meal unit could not resolve (INVALID_MEAL_UNIT only). */
   missing: Array<'floor' | 'canteen'>;
   floorId: string | null;
+  /** OVERRIDE: the HC admin moved this employee to another pick-up floor. */
+  floorSource: 'MEAL_UNIT' | 'OVERRIDE' | null;
   canteenId: string | null;
   costCenterId: string | null;
   costCenterSource: CostCenterResolutionSource | null;
@@ -149,14 +149,14 @@ export interface EmployeeMealAssignment {
 
 export function resolveEmployeeMealAssignment(args: {
   orgUnitId: string;
-  costCenterOverrideId: string | null;
+  /** Pick-up floor set for this employee; wins over the meal unit's floor. */
+  floorOverrideId: string | null;
   dmpCostCenterId?: string | null;
   index: OrgNodeIndex;
 }): EmployeeMealAssignment {
   const { index } = args;
   const cost = resolveEmployeeCostCenter({
     orgUnitId: args.orgUnitId,
-    overrideCostCenterId: args.costCenterOverrideId,
     dmpCostCenterId: args.dmpCostCenterId ?? null,
     index,
   });
@@ -174,19 +174,27 @@ export function resolveEmployeeMealAssignment(args: {
       status: 'NO_MEAL_UNIT',
       missing: [],
       floorId: null,
+      floorSource: null,
       canteenId: null,
       canRegister: false,
     };
   }
 
-  const mapping = resolveMealUnitMapping(mealUnitId, index);
-  if (!mapping.valid) {
+  // The meal unit still decides the canteen (BR-15); an employee floor stands in for a floor the
+  // unit lacks, so that employee can register while the rest of the unit cannot.
+  const { floor, canteen } = resolveNodeMapping(mealUnitId, index);
+  const floorId = args.floorOverrideId ?? floor.value;
+  if (floorId === null || canteen.value === null) {
+    const missing: Array<'floor' | 'canteen'> = [];
+    if (floorId === null) missing.push('floor');
+    if (canteen.value === null) missing.push('canteen');
     return {
       ...base,
       mealUnitId,
       status: 'INVALID_MEAL_UNIT',
-      missing: mapping.missing,
+      missing,
       floorId: null,
+      floorSource: null,
       canteenId: null,
       canRegister: false,
     };
@@ -196,8 +204,9 @@ export function resolveEmployeeMealAssignment(args: {
     mealUnitId,
     status: 'OK',
     missing: [],
-    floorId: mapping.floorId,
-    canteenId: mapping.canteenId,
+    floorId,
+    floorSource: args.floorOverrideId !== null ? 'OVERRIDE' : 'MEAL_UNIT',
+    canteenId: canteen.value,
     canRegister: true,
   };
 }

@@ -1,4 +1,4 @@
-import { costCenterId, type SeedOrgNode } from './org-tree';
+import type { SeedOrgNode } from './org-tree';
 
 export const SEED_EMPLOYEE_COUNT = 1700;
 
@@ -7,7 +7,6 @@ export interface SeedEmployee {
   name: string;
   email: string;
   orgUnitId: string;
-  costCenterOverrideId: string | null;
   dmpCostCenterCode: string | null;
   /** YYYY-MM-DD */
   startDate: string;
@@ -180,7 +179,6 @@ export function buildEmployees(nodes: SeedOrgNode[]): SeedEmployee[] {
       name: demo.name,
       email: demo.email,
       orgUnitId: node.id,
-      costCenterOverrideId: null,
       dmpCostCenterCode: dmpCcFor(demo.node),
       startDate: startDate(),
     });
@@ -203,7 +201,6 @@ export function buildEmployees(nodes: SeedOrgNode[]): SeedEmployee[] {
         name: `${family} ${middle} ${given}`,
         email: `${toAscii(given)}.${toAscii(family)}${seq}@pnjp.test`,
         orgUnitId: node.id,
-        costCenterOverrideId: seq % 97 === 0 ? costCenterId('CC10') : null,
         dmpCostCenterCode: dmpCcFor(node.dmpCode),
         startDate: startDate(),
       });

@@ -10,7 +10,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { CostCenterOverrideSchema } from '@meal/shared';
+import { FloorOverrideSchema } from '@meal/shared';
 import { z } from 'zod';
 import { PinAuthService } from '../auth/pin-auth.service';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
@@ -51,6 +51,14 @@ export class EmployeesController {
     return this.employees.list(scope, principal.factoryId, query);
   }
 
+  /** Khối / Trung tâm / Phòng ban filter options for the finder, within the caller's scope. */
+  @RequirePermission('pin.reset', { type: 'list' })
+  @Get('org-units')
+  async orgUnits(@Req() req: AuthedRequest, @CurrentPrincipal() principal: RequestPrincipal) {
+    const scope = req.listScope ?? { kind: 'none' as const };
+    return { items: await this.employees.orgUnits(scope, principal.factoryId) };
+  }
+
   @RequirePermission('pin.reset', { type: 'employeeParam', param: 'code' })
   @Post(':code/pin/reset')
   @HttpCode(HttpStatus.OK)
@@ -62,20 +70,20 @@ export class EmployeesController {
     return this.pinAuth.resetPin(principal.employeeId, code, body.reason);
   }
 
-  /** BR-63: cost-center override; part of "manage ... mapping" (HC admin and system admin). */
+  /** BR-63: pick-up floor of one employee; part of "manage ... mapping" (HC admin). */
   @RequirePermission('org.manage', { type: 'employeeParam', param: 'code' })
-  @Put(':code/cost-center-override')
-  setCostCenterOverride(
+  @Put(':code/floor-override')
+  setFloorOverride(
     @Param('code') code: string,
-    @Body(new ZodValidationPipe(CostCenterOverrideSchema))
-    body: z.infer<typeof CostCenterOverrideSchema>,
+    @Body(new ZodValidationPipe(FloorOverrideSchema))
+    body: z.infer<typeof FloorOverrideSchema>,
     @CurrentPrincipal() principal: RequestPrincipal,
   ) {
-    return this.employees.setCostCenterOverride(
+    return this.employees.setFloorOverride(
       principal.employeeId,
       principal.factoryId,
       code,
-      body.costCenterId,
+      body.floorId,
       body.reason,
     );
   }

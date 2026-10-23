@@ -22,10 +22,6 @@ export type SyncType = (typeof SYNC_TYPES)[number];
 export const SYNC_STATUSES = ['RUNNING', 'SUCCESS', 'FAILED'] as const;
 export type SyncStatus = (typeof SYNC_STATUSES)[number];
 
-/** BR-10: main-dish types. Display labels live in rules/menu (BR-12). */
-export const DISH_TYPES = ['CHAY', 'CHAO', 'MAN'] as const;
-export type DishType = (typeof DISH_TYPES)[number];
-
 /** Meal sessions; the MVP serves lunch only (plan section 1). */
 export const MEAL_SESSIONS = ['LUNCH'] as const;
 export type MealSession = (typeof MEAL_SESSIONS)[number];
@@ -64,6 +60,8 @@ export const API_ERROR_CODES = [
   'INVALID_STATE',
   /** BR-24: the day has locked (day.lockTime) for this kind of change. */
   'DAY_LOCKED',
+  /** A serving day of the menu lacks a main dish or a dessert (publishing rule, 2026-10-23). */
+  'MENU_INCOMPLETE',
   /** A DMP call failed; nothing was written. */
   'DMP_UNAVAILABLE',
   'INTERNAL',

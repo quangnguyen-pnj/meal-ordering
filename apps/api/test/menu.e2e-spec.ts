@@ -1,5 +1,6 @@
 import type { INestApplication } from '@nestjs/common';
 import type { MenuWeekView } from '@meal/shared';
+import ExcelJS from 'exceljs';
 import request from 'supertest';
 import {
   DEMO,
@@ -22,6 +23,7 @@ import {
  */
 const WEEK = '2027-03-01';
 const CANTEEN = 'ct_gv';
+const TYPE = { MAN: 'dt_fac_gv_MAN', CHAY: 'dt_fac_gv_CHAY', CHAO: 'dt_fac_gv_CHAO' } as const;
 const COLLEAGUE = 'PNJP000060'; // plain employee under the production meal units
 
 let app: INestApplication;
@@ -55,6 +57,12 @@ const day = (date: string, dishKeys: string[], dessertKeys: string[] = []) => ({
 });
 const off = (date: string) => ({ date, isServing: false, items: [], dessertIds: [] });
 const STANDARD = ['chay', 'chao', 'ca', 'thit'];
+const dishBody = (name: string, type: keyof typeof TYPE, canteenId: string = CANTEEN) => ({
+  canteenId,
+  name,
+  typeId: TYPE[type],
+  sessions: ['LUNCH'],
+});
 
 beforeAll(async () => {
   app = await createTestApp();
@@ -80,6 +88,8 @@ afterAll(async () => {
     await db().menuItem.deleteMany({ where: { menuDayId: { in: dayIds } } });
     await db().menuDay.deleteMany({ where: { id: { in: dayIds } } });
     await db().menuWeek.deleteMany({ where: { canteenId: testCanteen.id } });
+    await db().dish.deleteMany({ where: { canteenId: testCanteen.id } });
+    await db().dessert.deleteMany({ where: { canteenId: testCanteen.id } });
     await db().canteen.delete({ where: { id: testCanteen.id } });
   }
   await app.close();
@@ -88,7 +98,7 @@ afterAll(async () => {
 
 describe('BR-10: dish and dessert libraries', () => {
   it('BR-10: the HC admin adds main dishes with a type and sessions, shown as "[Type] Name"', async () => {
-    const defs: Array<[string, string, string]> = [
+    const defs: Array<[string, string, keyof typeof TYPE]> = [
       ['chay', 'Đậu hũ sốt cà', 'CHAY'],
       ['chao', 'Cháo gà', 'CHAO'],
       ['ca', 'Cá kho tộ', 'MAN'],
@@ -98,46 +108,104 @@ describe('BR-10: dish and dessert libraries', () => {
       ['old', 'Món cũ', 'MAN'],
     ];
     for (const [key, name, type] of defs) {
-      const res = await hc
-        .post('/api/admin/dishes')
-        .send({ name, type, sessions: ['LUNCH'] })
-        .expect(201);
+      const res = await hc.post('/api/admin/dishes').send(dishBody(name, type)).expect(201);
       dish[key] = res.body.id;
     }
-    const list = await hc.get('/api/admin/dishes').expect(200);
-    expect(list.body.items.find((d: { id: string }) => d.id === dish.ca).displayName).toBe(
-      '[Mặn] Cá kho tộ',
-    );
+    const list = await hc.get(`/api/admin/dishes?canteenId=${CANTEEN}`).expect(200);
+    const ca = list.body.items.find((d: { id: string }) => d.id === dish.ca);
+    expect(ca.displayName).toBe('[Mặn] Cá kho tộ');
+    expect(ca.type).toEqual({ id: TYPE.MAN, name: 'Mặn', color: '#b91c1c' });
     for (const [key, name] of [
       ['chuoi', 'Chuối'],
       ['raucau', 'Rau câu'],
+      ['sua', 'Sữa chua'],
     ] as const) {
-      dessert[key] = (await hc.post('/api/admin/desserts').send({ name }).expect(201)).body.id;
+      dessert[key] = (
+        await hc.post('/api/admin/desserts').send({ canteenId: CANTEEN, name }).expect(201)
+      ).body.id;
     }
   });
 
+  it('BR-10: the same dish cannot be added twice, whatever its case or spacing', async () => {
+    const res = await hc
+      .post('/api/admin/dishes')
+      .send(dishBody('  cá KHO   tộ ', 'MAN'))
+      .expect(409);
+    expect(res.body).toMatchObject({ code: 'CONFLICT', details: [{ message: 'DUPLICATE' }] });
+    // Two identical requests at once: only one is stored.
+    const twice = await Promise.all([
+      hc.post('/api/admin/dishes').send(dishBody('Canh chua', 'MAN')),
+      hc.post('/api/admin/dishes').send(dishBody('Canh chua', 'MAN')),
+    ]);
+    expect(twice.map((r) => r.status).sort()).toEqual([201, 409]);
+    expect(await db().dish.count({ where: { name: 'Canh chua' } })).toBe(1);
+    await hc.post('/api/admin/desserts').send({ canteenId: CANTEEN, name: 'chuối' }).expect(409);
+    // Another type is another dish; a name is stored trimmed with single spaces.
+    const chay = await hc
+      .post('/api/admin/dishes')
+      .send(dishBody(' Cá   kho tộ', 'CHAY'))
+      .expect(201);
+    expect(chay.body.name).toBe('Cá kho tộ');
+    await hc.post(`/api/admin/dishes/${chay.body.id}/archive`).expect(200);
+    // An archived copy still counts: restore it instead of adding it again.
+    const again = await hc
+      .post('/api/admin/dishes')
+      .send(dishBody('cá kho tộ', 'CHAY'))
+      .expect(409);
+    expect(again.body.details[0]).toMatchObject({
+      message: 'DUPLICATE_ARCHIVED',
+      id: chay.body.id,
+    });
+  });
+
+  it('BR-10: each canteen has its own library', async () => {
+    await hc.get('/api/admin/dishes').expect(400); // canteenId is required
+    await hc.get('/api/admin/dishes?canteenId=nope').expect(404);
+    const other = await db().canteen.create({
+      data: { factoryId: 'fac_gv', code: 'CT-TEST', name: 'Nhà ăn thử', supplierId: 'sup_gv' },
+    });
+    // The same name is fine in another canteen's library.
+    const res = await hc
+      .post('/api/admin/dishes')
+      .send(dishBody('Cá kho tộ', 'MAN', other.id))
+      .expect(201);
+    dish.otherCa = res.body.id;
+    dessert.otherChuoi = (
+      await hc.post('/api/admin/desserts').send({ canteenId: other.id, name: 'Chuối' }).expect(201)
+    ).body.id;
+    const list = await hc.get(`/api/admin/dishes?canteenId=${other.id}`).expect(200);
+    expect(list.body.items.map((d: { id: string }) => d.id)).toEqual([dish.otherCa]);
+    // A dish of another canteen cannot go on this canteen's menu.
+    await hc
+      .put('/api/admin/menu/weeks')
+      .send({ canteenId: CANTEEN, weekStart: WEEK, days: [day('2027-03-01', ['otherCa'])] })
+      .expect(400);
+  });
+
   it('BR-10: name, type and at least one session are required', async () => {
+    await hc.post('/api/admin/dishes').send(dishBody('', 'MAN')).expect(400);
     await hc
       .post('/api/admin/dishes')
-      .send({ name: '', type: 'MAN', sessions: ['LUNCH'] })
+      .send({ ...dishBody('X', 'MAN'), typeId: 'dt_nope' })
       .expect(400);
     await hc
       .post('/api/admin/dishes')
-      .send({ name: 'X', type: 'BBQ', sessions: ['LUNCH'] })
+      .send({ ...dishBody('X', 'MAN'), sessions: [] })
       .expect(400);
-    await hc.post('/api/admin/dishes').send({ name: 'X', type: 'MAN', sessions: [] }).expect(400);
-    await hc.post('/api/admin/desserts').send({ name: ' ' }).expect(400);
+    await hc.post('/api/admin/desserts').send({ canteenId: CANTEEN, name: ' ' }).expect(400);
   });
 
   it('BR-10: edits are audited; archived dishes leave the default list but are never deleted', async () => {
     await hc
       .put(`/api/admin/dishes/${dish.old}`)
-      .send({ name: 'Món cũ (bỏ)', type: 'MAN', sessions: ['LUNCH'] })
+      .send({ name: 'Món cũ (bỏ)', typeId: TYPE.MAN, sessions: ['LUNCH'] })
       .expect(200);
     await hc.post(`/api/admin/dishes/${dish.old}/archive`).expect(200);
-    const active = await hc.get('/api/admin/dishes').expect(200);
+    const active = await hc.get(`/api/admin/dishes?canteenId=${CANTEEN}`).expect(200);
     expect(active.body.items.some((d: { id: string }) => d.id === dish.old)).toBe(false);
-    const all = await hc.get('/api/admin/dishes?includeArchived=true').expect(200);
+    const all = await hc
+      .get(`/api/admin/dishes?canteenId=${CANTEEN}&includeArchived=true`)
+      .expect(200);
     expect(all.body.items.find((d: { id: string }) => d.id === dish.old).archivedAt).not.toBeNull();
     expect(await db().dish.count({ where: { id: dish.old } })).toBe(1);
     const audits = await db().auditLog.findMany({ where: { entityId: dish.old } });
@@ -145,8 +213,54 @@ describe('BR-10: dish and dessert libraries', () => {
   });
 });
 
+describe('BR-10 / BR-13: dish types are master data', () => {
+  it('BR-10: the HC admin adds a type with a colour; it is shown with dishes and has no bounds by default', async () => {
+    const created = await hc
+      .post('/api/admin/dish-types')
+      .send({ code: 'lowcarb', name: 'Low-carb', color: '#7C3AED', sortOrder: 9 })
+      .expect(201);
+    const list = await hc.get('/api/admin/dish-types').expect(200);
+    const lowcarb = list.body.items.find((t: { id: string }) => t.id === created.body.id);
+    expect(lowcarb).toMatchObject({
+      code: 'LOWCARB',
+      color: '#7c3aed',
+      minPerDay: null,
+      maxPerDay: null,
+      active: true,
+    });
+    expect(list.body.items.map((t: { code: string }) => t.code).slice(0, 3)).toEqual([
+      'MAN',
+      'CHAY',
+      'CHAO',
+    ]);
+    await hc
+      .post('/api/admin/dish-types')
+      .send({ code: 'LOWCARB', name: 'X', color: '#000000' })
+      .expect(409);
+    await hc
+      .post('/api/admin/dish-types')
+      .send({ code: 'X1', name: 'X', color: 'red' })
+      .expect(400);
+    await hc
+      .patch(`/api/admin/dish-types/${created.body.id}`)
+      .send({ minPerDay: 2, maxPerDay: 1 })
+      .expect(400);
+    await hc
+      .patch(`/api/admin/dish-types/${created.body.id}`)
+      .send({ name: 'Eat clean / Low-carb', active: false })
+      .expect(200);
+    // An inactive type takes no new dishes.
+    await hc
+      .post('/api/admin/dishes')
+      .send({ canteenId: CANTEEN, name: 'Ức gà', typeId: created.body.id, sessions: ['LUNCH'] })
+      .expect(400);
+    const audits = await db().auditLog.findMany({ where: { entityId: created.body.id } });
+    expect(audits.map((a) => a.action)).toEqual(['dishType.created', 'dishType.updated']);
+  });
+});
+
 describe('building and publishing a week (BR-08, BR-11, BR-13, BR-03)', () => {
-  it('BR-08: a new week offers Monday to Saturday, serving Monday to Friday, with the expected closeAt', async () => {
+  it('BR-08: a new week offers Monday to Sunday, serving Monday to Friday, with the expected closeAt', async () => {
     const res = await hc
       .get(`/api/admin/menu/weeks?canteenId=${CANTEEN}&weekStart=${WEEK}`)
       .expect(200);
@@ -158,7 +272,9 @@ describe('building and publishing a week (BR-08, BR-11, BR-13, BR-03)', () => {
       true,
       true,
       false,
+      false,
     ]);
+    expect(res.body.days.at(-1).date).toBe('2027-03-07'); // Sunday can be turned on too
     expect(res.body.closeAtIsExpected).toBe(true);
     expect(res.body.closeAt).toBe('2027-02-25T17:00:00.000Z');
   });
@@ -181,15 +297,23 @@ describe('building and publishing a week (BR-08, BR-11, BR-13, BR-03)', () => {
           day('2027-03-02', [...STANDARD, 'ga'], ['raucau']),
           day('2027-03-03', ['ca']),
           day('2027-03-04', STANDARD),
-          day('2027-03-05', STANDARD),
-          day('2027-03-06', ['chay', 'ca', 'thit']),
+          day('2027-03-05', STANDARD, ['sua']),
+          day('2027-03-06', ['chay', 'ca', 'thit'], ['chuoi']),
         ],
       })
       .expect(200);
     week = res.body.menu;
     expect(week.status).toBe('DRAFT');
-    expect(week.days.map((d) => d.mix?.usual)).toEqual([true, true, false, true, true, false]);
-    expect(week.days[2]!.mix!.issues.map((i) => i.type)).toEqual(['CHAY', 'CHAO', 'MAN']);
+    expect(week.days.map((d) => d.mix?.usual ?? null)).toEqual([
+      true,
+      true,
+      false,
+      true,
+      true,
+      false,
+      null,
+    ]);
+    expect(week.days[2]!.mix!.issues.map((i) => i.typeName)).toEqual(['Mặn', 'Chay', 'Cháo']);
     expect(week.days[5]!.isServing).toBe(true); // Saturday turned on for this week
     expect(week.days[0]!.desserts).toEqual([{ id: dessert.chuoi, name: 'Chuối' }]);
     expect(week.days[0]!.items.map((i) => i.displayName)).toEqual([
@@ -228,8 +352,33 @@ describe('building and publishing a week (BR-08, BR-11, BR-13, BR-03)', () => {
     });
   });
 
+  it('a week with a serving day lacking a main dish or a dessert cannot be published', async () => {
+    const res = await hc.post(`/api/admin/menu/weeks/${week.id}/publish`).expect(409);
+    expect(res.body.code).toBe('MENU_INCOMPLETE');
+    expect(res.body.details).toEqual([
+      { date: '2027-03-03', gaps: ['DESSERT'] },
+      { date: '2027-03-04', gaps: ['DESSERT'] },
+    ]);
+    const direct = await hc
+      .post('/api/admin/menu/weeks/publish')
+      .send({ canteenId: CANTEEN, weekStart: WEEK, days: [day('2027-03-03', [], ['chuoi'])] })
+      .expect(409);
+    expect(direct.body.details).toEqual([{ date: '2027-03-03', gaps: ['MAIN'] }]);
+    expect((await db().menuWeek.findUniqueOrThrow({ where: { id: week.id! } })).status).toBe(
+      'DRAFT',
+    );
+  });
+
   it('BR-03: publishing on Monday of week N-1 fixes closeAt at the regular 00:00 Friday', async () => {
-    const res = await hc.post(`/api/admin/menu/weeks/${week.id}/publish`).expect(200);
+    // Publishing straight from the builder saves the submitted days first (no draft step).
+    const res = await hc
+      .post('/api/admin/menu/weeks/publish')
+      .send({
+        canteenId: CANTEEN,
+        weekStart: WEEK,
+        days: [day('2027-03-03', ['ca'], ['raucau']), day('2027-03-04', STANDARD, ['chuoi'])],
+      })
+      .expect(200);
     expect(res.body.status).toBe('PUBLISHED');
     expect(res.body.closeAt).toBe('2027-02-25T17:00:00.000Z');
     expect(res.body.closeAtIsExpected).toBe(false);
@@ -261,6 +410,7 @@ describe("employees see their canteen's published menu (BR-02, BR-15, BR-63)", (
       '2027-03-05',
       '2027-03-06',
     ]);
+    expect(menu.days[2]!.desserts).toEqual([{ id: dessert.raucau, name: 'Rau câu' }]);
     expect(menu.days[0]!.items.map((i) => i.displayName)).toContain('[Mặn] Cá kho tộ');
     expect(menu.days[0]!.mix).toBeNull(); // the mix warning is for the HC admin only
   });
@@ -276,14 +426,17 @@ describe("employees see their canteen's published menu (BR-02, BR-15, BR-63)", (
   });
 
   it("BR-15: menus are per canteen; an employee sees only their meal unit's canteen", async () => {
-    // A second canteen, mapped onto Phòng IT (where the system admin works).
-    const other = await db().canteen.create({
-      data: { factoryId: 'fac_gv', code: 'CT-TEST', name: 'Nhà ăn thử', supplierId: 'sup_gv' },
-    });
+    // A second canteen (created with its library above), mapped onto Phòng IT (where the
+    // system admin works).
+    const other = await db().canteen.findFirstOrThrow({ where: { code: 'CT-TEST' } });
     const otherWeek = '2027-03-15';
     const saved = await hc
       .put('/api/admin/menu/weeks')
-      .send({ canteenId: other.id, weekStart: otherWeek, days: [day('2027-03-15', ['ca'])] })
+      .send({
+        canteenId: other.id,
+        weekStart: otherWeek,
+        days: [day('2027-03-15', ['otherCa'], ['otherChuoi'])],
+      })
       .expect(200);
     await hc.post(`/api/admin/menu/weeks/${saved.body.menu.id}/publish`).expect(200);
     await db().orgUnit.update({ where: { id: 'ou_IT' }, data: { canteenId: other.id } });
@@ -434,7 +587,11 @@ describe('BR-04: late publish', () => {
     await signInAll();
     const saved = await hc
       .put('/api/admin/menu/weeks')
-      .send({ canteenId: CANTEEN, weekStart: '2027-03-08', days: [day('2027-03-08', STANDARD)] })
+      .send({
+        canteenId: CANTEEN,
+        weekStart: '2027-03-08',
+        days: [day('2027-03-08', STANDARD, ['chuoi'])],
+      })
       .expect(200);
     expect(saved.body.menu.latePublish).toBe(true);
     const res = await hc.post(`/api/admin/menu/weeks/${saved.body.menu.id}/publish`).expect(200);
@@ -443,17 +600,91 @@ describe('BR-04: late publish', () => {
   });
 });
 
+describe('BR-10: Excel import of a canteen library', () => {
+  const HEADER = ['Nhóm (Món chính / Tráng miệng)', 'Mã loại món (món chính)', 'Tên món'];
+  async function file(rows: string[][], header = HEADER) {
+    const wb = new ExcelJS.Workbook();
+    const sheet = wb.addWorksheet('Thư viện món');
+    sheet.addRow(header);
+    for (const r of rows) sheet.addRow(r);
+    return Buffer.from(await wb.xlsx.writeBuffer());
+  }
+  const upload = (buffer: Buffer, apply: boolean) =>
+    hc
+      .post(`/api/admin/dish-library/import?canteenId=${CANTEEN}&apply=${apply}`)
+      .attach('file', buffer, 'thu-vien.xlsx');
+
+  it('BR-10: the template lists the active dish-type codes', async () => {
+    const res = await hc
+      .get('/api/admin/dish-library/template')
+      .buffer(true)
+      .parse((r, cb) => {
+        const chunks: Buffer[] = [];
+        r.on('data', (c: Buffer) => chunks.push(c));
+        r.on('end', () => cb(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(res.body as ArrayBuffer);
+    expect(wb.worksheets[0]!.getRow(1).getCell(1).text).toBe(HEADER[0]);
+    const codes: string[] = [];
+    wb.worksheets[1]!.eachRow((row, n) => n > 1 && codes.push(row.getCell(1).text));
+    expect(codes).toEqual(expect.arrayContaining(['MAN', 'CHAY', 'CHAO']));
+  });
+
+  it('BR-10: previews, then adds only what the library does not have yet', async () => {
+    const buffer = await file([
+      ['Món chính', 'MAN', 'Cá kho tộ'], // already in the library
+      ['Món chính', 'chay', 'Nấm kho tiêu'],
+      ['Tráng miệng', '', 'Thạch dừa'],
+    ]);
+    const preview = (await upload(buffer, false).expect(200)).body;
+    expect(preview).toMatchObject({ status: 'PREVIEW', rowCount: 3, alreadyInLibrary: 1 });
+    expect(preview.toCreate.map((r: { name: string }) => r.name)).toEqual([
+      'Nấm kho tiêu',
+      'Thạch dừa',
+    ]);
+    expect(await db().dish.count({ where: { name: 'Nấm kho tiêu' } })).toBe(0);
+    const applied = (await upload(buffer, true).expect(200)).body;
+    expect(applied.status).toBe('APPLIED');
+    expect(await db().dish.count({ where: { name: 'Nấm kho tiêu', canteenId: CANTEEN } })).toBe(1);
+    expect(await db().dessert.count({ where: { name: 'Thạch dừa', canteenId: CANTEEN } })).toBe(1);
+    // The same file again adds nothing: no dish is ever added twice.
+    const again = (await upload(buffer, true).expect(200)).body;
+    expect(again).toMatchObject({ toCreate: [], alreadyInLibrary: 3 });
+    expect(await db().dish.count({ where: { name: 'Nấm kho tiêu' } })).toBe(1);
+  });
+
+  it('BR-10: one bad row rejects the file; a file that is not the template is refused', async () => {
+    const res = (
+      await upload(
+        await file([
+          ['Món chính', 'BBQ', 'Bò nướng'],
+          ['Món chính', 'MAN', 'Gà rô ti'],
+        ]),
+        true,
+      ).expect(200)
+    ).body;
+    expect(res.status).toBe('REJECTED');
+    expect(res.errors).toEqual([
+      { rowNumber: 2, field: 'typeCode', code: 'TYPE_UNKNOWN', value: 'BBQ' },
+    ]);
+    expect(await db().dish.count({ where: { name: 'Gà rô ti' } })).toBe(0);
+    await upload(await file([['x']], ['Khác']), false).expect(400);
+  });
+});
+
 describe('403 on every dish and menu admin endpoint', () => {
   const id = 'x';
-  const dishBody = { name: 'X', type: 'MAN', sessions: ['LUNCH'] };
+  const body = dishBody('X', 'MAN');
   const endpoints: Endpoint[] = [
-    { method: 'get', url: '/api/admin/dishes' },
-    { method: 'post', url: '/api/admin/dishes', body: dishBody },
-    { method: 'put', url: `/api/admin/dishes/${id}`, body: dishBody },
+    { method: 'get', url: `/api/admin/dishes?canteenId=${CANTEEN}` },
+    { method: 'post', url: '/api/admin/dishes', body },
+    { method: 'put', url: `/api/admin/dishes/${id}`, body },
     { method: 'post', url: `/api/admin/dishes/${id}/archive` },
     { method: 'post', url: `/api/admin/dishes/${id}/restore` },
-    { method: 'get', url: '/api/admin/desserts' },
-    { method: 'post', url: '/api/admin/desserts', body: { name: 'X' } },
+    { method: 'get', url: `/api/admin/desserts?canteenId=${CANTEEN}` },
+    { method: 'post', url: '/api/admin/desserts', body: { canteenId: CANTEEN, name: 'X' } },
     { method: 'put', url: `/api/admin/desserts/${id}`, body: { name: 'X' } },
     { method: 'post', url: `/api/admin/desserts/${id}/archive` },
     { method: 'post', url: `/api/admin/desserts/${id}/restore` },
@@ -465,6 +696,20 @@ describe('403 on every dish and menu admin endpoint', () => {
       body: { canteenId: CANTEEN, weekStart: WEEK, days: [off(WEEK)] },
     },
     { method: 'post', url: `/api/admin/menu/weeks/${id}/publish` },
+    {
+      method: 'post',
+      url: '/api/admin/menu/weeks/publish',
+      body: { canteenId: CANTEEN, weekStart: WEEK, days: [off(WEEK)] },
+    },
+    { method: 'get', url: '/api/admin/dish-types' },
+    {
+      method: 'post',
+      url: '/api/admin/dish-types',
+      body: { code: 'X', name: 'X', color: '#000000' },
+    },
+    { method: 'patch', url: `/api/admin/dish-types/${id}`, body: { name: 'X' } },
+    { method: 'get', url: '/api/admin/dish-library/template' },
+    { method: 'post', url: `/api/admin/dish-library/import?canteenId=${CANTEEN}` },
   ];
 
   it('an employee, a dept admin and a system admin get 403 (dish library and menu are HC only)', async () => {

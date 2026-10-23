@@ -24,7 +24,7 @@ const employees = buildEmployees(nodes);
 const assignmentOf = (orgUnit: string, override: string | null = null) =>
   resolveEmployeeMealAssignment({
     orgUnitId: orgUnitId(orgUnit),
-    costCenterOverrideId: override,
+    floorOverrideId: override,
     index,
   });
 
@@ -120,21 +120,24 @@ describe('BR-60 / BR-63 on the seed tree', () => {
     expect(assignmentOf('KHO-XH')).toMatchObject({ status: 'NO_MEAL_UNIT', canRegister: false });
   });
 
-  it('BR-63: an employee-level cost-center override beats the inherited mapping', () => {
+  it('BR-63: cost center follows the org tree; an employee pick-up floor beats the meal unit floor', () => {
     expect(assignmentOf('XCT-A1-1')).toMatchObject({
       costCenterId: costCenterId('CC03'),
       costCenterSource: 'MAPPING',
+      floorId: floorId('T2'),
+      floorSource: 'MEAL_UNIT',
     });
-    expect(assignmentOf('XCT-A1-1', costCenterId('CC10'))).toMatchObject({
-      costCenterId: costCenterId('CC10'),
-      costCenterSource: 'OVERRIDE',
+    expect(assignmentOf('XCT-A1-1', floorId('T1'))).toMatchObject({
+      costCenterId: costCenterId('CC03'),
+      floorId: floorId('T1'),
+      floorSource: 'OVERRIDE',
     });
   });
 
   it('BR-63: Kho vận Xuất hàng has no cost center, but registration is not blocked by that', () => {
     const a = resolveEmployeeMealAssignment({
       orgUnitId: orgUnitId('XCT-B1-1'),
-      costCenterOverrideId: null,
+      floorOverrideId: null,
       index,
     });
     expect(a.canRegister).toBe(true);
@@ -147,7 +150,7 @@ describe('BR-60 / BR-63 on the seed tree', () => {
       counts[
         resolveEmployeeMealAssignment({
           orgUnitId: e.orgUnitId,
-          costCenterOverrideId: e.costCenterOverrideId,
+          floorOverrideId: null,
           index,
         }).status
       ] += 1;

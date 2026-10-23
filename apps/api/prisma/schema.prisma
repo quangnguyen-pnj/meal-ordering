@@ -46,13 +46,6 @@ enum SyncStatus {
   FAILED
 }
 
-/// BR-10
-enum DishType {
-  CHAY
-  CHAO
-  MAN
-}
-
 enum MealSession {
   LUNCH
 }
@@ -100,6 +93,7 @@ model Factory {
   costCenters     CostCenter[]
   orgUnits        OrgUnit[]
   roleAssignments RoleAssignment[]
+  dishTypes       DishType[]
   dishes          Dish[]
   desserts        Dessert[]
   menuWeeks       MenuWeek[]
@@ -142,6 +136,9 @@ model Canteen {
   supplier  Supplier   @relation(fields: [supplierId], references: [id])
   orgUnits  OrgUnit[]
   menuWeeks MenuWeek[]
+  /// Each canteen has its own dish and dessert library (product owner, 2026-10-23).
+  dishes    Dish[]
+  desserts  Dessert[]
 
   @@unique([factoryId, code])
 }
@@ -155,8 +152,10 @@ model Floor {
   sortOrder Int     @default(0)
   active    Boolean @default(true)
 
-  factory  Factory   @relation(fields: [factoryId], references: [id])
-  orgUnits OrgUnit[]
+  factory          Factory    @relation(fields: [factoryId], references: [id])
+  orgUnits         OrgUnit[]
+  /// Employees an HC admin moved to this floor to pick up their meal.
+  floorOverrideFor Employee[] @relation("FloorOverride")
 
   @@unique([factoryId, code])
 }
@@ -226,6 +225,11 @@ model Employee {
   orgUnitId            String
   /// Nearest flagged ancestor-or-self (BR-60); recomputed on sync or flag change.
   mealUnitId           String?
+  /// Where the employee picks up their meal when it is not their meal unit's floor, e.g. an IT
+  /// employee of floor 3 who sits on floor 1 (product owner, 2026-10-23). Set by the HC admin.
+  floorOverrideId      String?
+  /// No longer read: cost center follows the org tree (product owner, 2026-10-23). Kept, never
+  /// deleted (rule 7), so earlier overrides stay on record.
   costCenterOverrideId String?
   dmpCostCenterCode    String?
   status               EmployeeStatus @default(ACTIVE)
@@ -239,6 +243,7 @@ model Employee {
 
   orgUnit            OrgUnit          @relation("EmployeeOrgUnit", fields: [orgUnitId], references: [id])
   mealUnit           OrgUnit?         @relation("EmployeeMealUnit", fields: [mealUnitId], references: [id])
+  floorOverride      Floor?           @relation("FloorOverride", fields: [floorOverrideId], references: [id])
   costCenterOverride CostCenter?      @relation("CostCenterOverride", fields: [costCenterOverrideId], references: [id])
   roleAssignments    RoleAssignment[]
   sessions           AuthSession[]
@@ -321,32 +326,63 @@ model SyncRun {
   @@index([type, startedAt])
 }
 
-/// BR-10: main-dish library, reused across weeks; archived, never deleted.
+/// BR-10: dish types (Mặn, Chay, Cháo, Eat clean, ...), master data since 2026-10-23. Drawn in
+/// `color` next to the dish name; `minPerDay` / `maxPerDay` are the usual mix (BR-13, warning
+/// only). Deactivated, never deleted.
+model DishType {
+  id        String   @id @default(cuid())
+  factoryId String
+  code      String
+  name      String
+  /// #rrggbb
+  color     String
+  sortOrder Int      @default(0)
+  minPerDay Int?
+  maxPerDay Int?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  factory Factory @relation(fields: [factoryId], references: [id])
+  dishes  Dish[]
+
+  @@unique([factoryId, code])
+}
+
+/// BR-10: main-dish library of one canteen, reused across weeks; archived, never deleted.
+/// The migration adds a unique index on (canteenId, typeId, lower(name)): no duplicate dishes.
 model Dish {
   id         String        @id @default(cuid())
   factoryId  String
+  canteenId  String
   name       String
-  type       DishType
+  typeId     String
   sessions   MealSession[]
   archivedAt DateTime?
   createdAt  DateTime      @default(now())
 
   factory   Factory    @relation(fields: [factoryId], references: [id])
+  canteen   Canteen    @relation(fields: [canteenId], references: [id])
+  type      DishType   @relation(fields: [typeId], references: [id])
   menuItems MenuItem[]
 
-  @@index([factoryId, type])
+  @@index([canteenId, typeId])
 }
 
-/// BR-10: dessert library; display-only on a day (BR-11).
+/// BR-10: dessert library of one canteen; display-only on a day (BR-11).
+/// The migration adds a unique index on (canteenId, lower(name)).
 model Dessert {
   id         String    @id @default(cuid())
   factoryId  String
+  canteenId  String
   name       String
   archivedAt DateTime?
   createdAt  DateTime  @default(now())
 
   factory  Factory          @relation(fields: [factoryId], references: [id])
+  canteen  Canteen          @relation(fields: [canteenId], references: [id])
   menuDays MenuDayDessert[]
+
+  @@index([canteenId])
 }
 
 /// BR-15: one menu per canteen and week. closeAt is computed at publish (BR-03, BR-04).
@@ -404,6 +440,7 @@ model MenuItem {
   replacedBy    MenuItem?      @relation("MenuItemReplacement", fields: [replacedByItemId], references: [id])
   replaces      MenuItem[]     @relation("MenuItemReplacement")
   registrations Registration[]
+  movedHere     Registration[] @relation("RegistrationReplacedFrom")
   forecastLines ForecastLine[]
 
   @@index([menuDayId])
@@ -425,21 +462,25 @@ model MenuDayDessert {
 /// BR-20: quantity per employee per menu item. Created in P1 only so BR-14 can move or flag
 /// registrations when a published menu changes; the registration flows arrive in P2.
 model Registration {
-  id          String             @id @default(cuid())
-  employeeId  String
-  menuItemId  String
-  date        DateTime           @db.Date
-  session     MealSession        @default(LUNCH)
-  quantity    Int
-  source      RegistrationSource
-  isExtra     Boolean            @default(false)
-  extraReason String?
-  status      RegistrationStatus @default(ACTIVE)
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  id                 String             @id @default(cuid())
+  employeeId         String
+  menuItemId         String
+  date               DateTime           @db.Date
+  session            MealSession        @default(LUNCH)
+  quantity           Int
+  source             RegistrationSource
+  isExtra            Boolean            @default(false)
+  extraReason        String?
+  status             RegistrationStatus @default(ACTIVE)
+  /// BR-14: the item this meal was on before the HC admin replaced its dish. The employee sees a
+  /// red note on the new dish when the replacement came after closeAt (2026-10-23).
+  replacedFromItemId String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 
-  employee Employee @relation(fields: [employeeId], references: [id])
-  menuItem MenuItem @relation(fields: [menuItemId], references: [id])
+  employee     Employee  @relation(fields: [employeeId], references: [id])
+  menuItem     MenuItem  @relation(fields: [menuItemId], references: [id])
+  replacedFrom MenuItem? @relation("RegistrationReplacedFrom", fields: [replacedFromItemId], references: [id])
 
   @@unique([employeeId, menuItemId])
   @@index([date, session])

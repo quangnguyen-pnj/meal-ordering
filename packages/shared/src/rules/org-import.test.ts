@@ -74,7 +74,7 @@ describe('BR-64: mapping import validation', () => {
     const r = validateMappingRows(
       [
         row(2, { code: 'XCT', floorCode: 'T2', costCenterCode: 'CC03' }),
-        row(3, { type: 'employee', code: 'PNJP000001', costCenterCode: 'CC01' }),
+        row(3, { type: 'employee', code: 'PNJP000001', floorCode: 'T1' }),
       ],
       lookups,
     );
@@ -93,9 +93,9 @@ describe('BR-64: mapping import validation', () => {
           rowNumber: 3,
           type: 'EMPLOYEE',
           code: 'PNJP000001',
-          floorCode: null,
+          floorCode: 'T1',
           canteenCode: null,
-          costCenterCode: 'CC01',
+          costCenterCode: null,
         },
       ],
     });
@@ -119,14 +119,22 @@ describe('BR-64: mapping import validation', () => {
     });
   });
 
-  it('BR-64 / BR-63: an employee row may not set floor or canteen', () => {
+  it('BR-64 / BR-63: an employee row sets only the pick-up floor, never canteen or cost center', () => {
     const r = validateMappingRows(
-      [row(2, { type: 'EMPLOYEE', code: 'PNJP000001', floorCode: 'T1', canteenCode: 'CT-GV' })],
+      [
+        row(2, {
+          type: 'EMPLOYEE',
+          code: 'PNJP000001',
+          floorCode: 'T1',
+          canteenCode: 'CT-GV',
+          costCenterCode: 'CC01',
+        }),
+      ],
       lookups,
     );
-    expect(r.ok ? [] : r.errors.map((e) => e.code)).toEqual([
-      'EMPLOYEE_FLOOR_OR_CANTEEN',
-      'EMPLOYEE_FLOOR_OR_CANTEEN',
+    expect(r.ok ? [] : r.errors.map((e) => [e.field, e.code])).toEqual([
+      ['canteenCode', 'EMPLOYEE_CANTEEN_OR_COST_CENTER'],
+      ['costCenterCode', 'EMPLOYEE_CANTEEN_OR_COST_CENTER'],
     ]);
   });
 

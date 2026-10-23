@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import type { NotificationType, Prisma } from '@prisma/client';
 import {
   addDays,
@@ -8,11 +8,14 @@ import {
   isDefaultServingDay,
   isoWeekdayOf,
   mealDisplayName,
+  menuDayGaps,
   menuWeekDates,
+  menuWeekGaps,
   resolveEmployeeMealAssignment,
   planMenuDayEdit,
-  type DishType,
+  type MenuDayGap,
   type MenuDayView,
+  type MenuMixRule,
   type MenuSaveResult,
   type MenuWeekSave,
   type MenuWeekView,
@@ -20,7 +23,7 @@ import {
 } from '@meal/shared';
 import { AuditService } from '../audit/audit.service';
 import { ClockService } from '../clock/clock.service';
-import { invalid, invalidState, notFound } from '../common/api-error';
+import { ApiException, invalid, invalidState, notFound } from '../common/api-error';
 import { loadOrg } from '../org/org-index';
 import { PrismaService } from '../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
@@ -38,7 +41,7 @@ const WEEK_INCLUDE = {
       items: {
         where: { removedAt: null },
         orderBy: { sortOrder: 'asc' },
-        include: { dish: true },
+        include: { dish: { include: { type: true } } },
       },
       desserts: {
         where: { removedAt: null },
@@ -50,6 +53,15 @@ const WEEK_INCLUDE = {
 } satisfies Prisma.MenuWeekInclude;
 
 type StoredWeek = Prisma.MenuWeekGetPayload<{ include: typeof WEEK_INCLUDE }>;
+
+/** 409 listing every serving day that lacks a main dish or a dessert (publishing rule). */
+const incomplete = (days: Array<{ date: string; gaps: MenuDayGap[] }>) =>
+  new ApiException(
+    HttpStatus.CONFLICT,
+    'MENU_INCOMPLETE',
+    'Every serving day needs a main dish and a dessert',
+    { details: days },
+  );
 
 function assertMonday(weekStart: string): void {
   let monday = false;
@@ -103,11 +115,12 @@ export class MenuService {
     withMix: boolean,
   ): Promise<MenuWeekView> {
     const now = this.clock.now();
-    const [servingDays, closeRule, latePublishHours, lockTime] = await Promise.all([
+    const [servingDays, closeRule, latePublishHours, lockTime, mixRules] = await Promise.all([
       this.settings.get(factoryId, 'servingDays'),
       this.settings.get(factoryId, 'registration.close'),
       this.settings.get(factoryId, 'registration.latePublishHours'),
       this.settings.get(factoryId, 'day.lockTime'),
+      withMix ? this.mixRules(factoryId) : Promise.resolve([]),
     ]);
     const published = week !== null && week.status !== 'DRAFT';
     const stored = new Map((week?.days ?? []).map((d) => [fromDb(d.date), d]));
@@ -120,15 +133,21 @@ export class MenuService {
         id: i.id,
         dishId: i.dishId,
         dishName: i.dish.name,
-        type: i.dish.type as DishType,
-        displayName: mealDisplayName(i.dish.type, i.dish.name),
+        type: { id: i.dish.type.id, name: i.dish.type.name, color: i.dish.type.color },
+        displayName: mealDisplayName(i.dish.type.name, i.dish.name),
       }));
       return {
         date,
         isServing,
         items,
         desserts: (d?.desserts ?? []).map((x) => ({ id: x.dessertId, name: x.dessert.name })),
-        mix: withMix && isServing ? checkMenuMix(items.map((i) => i.type)) : null,
+        mix:
+          withMix && isServing
+            ? checkMenuMix(
+                items.map((i) => i.type.id),
+                mixRules,
+              )
+            : null,
       };
     });
 
@@ -220,6 +239,8 @@ export class MenuService {
 
         const before: Record<string, unknown> = {};
         const after: Record<string, unknown> = {};
+        // A published day keeps at least one main dish and one dessert (publishing rule).
+        const gaps: Array<{ date: string; gaps: MenuDayGap[] }> = [];
         const notices: Array<{ employeeIds: string[]; type: NotificationType; payload: object }> =
           [];
 
@@ -248,23 +269,36 @@ export class MenuService {
                 date: day.date,
               });
             }
+            const dayGaps = menuDayGaps({
+              isServing: day.isServing,
+              mainCount: day.items.length,
+              dessertCount: day.dessertIds.length,
+            });
+            if (dayGaps.length > 0) gaps.push({ date: day.date, gaps: dayGaps });
           }
 
           const plan = planMenuDayEdit(currentItems, day.items);
           if (!plan.ok) throw invalid('Invalid menu items', plan.errors);
-          // New and replacement dishes must be in the library, not archived, and served at lunch.
+          // New and replacement dishes must be in this canteen's library, not archived, and
+          // served at lunch.
           for (const dishId of [
             ...plan.plan.add.map((a) => a.dishId),
             ...plan.plan.replace.map((r) => r.toDishId),
           ]) {
             const dish = dishes.get(dishId);
-            if (!dish || dish.archivedAt || !dish.sessions.includes('LUNCH')) {
+            if (
+              !dish ||
+              dish.archivedAt ||
+              dish.canteenId !== canteen.id ||
+              !dish.sessions.includes('LUNCH')
+            ) {
               throw invalid('Dish not available', [{ path: 'dishId', message: dishId }]);
             }
           }
           for (const dessertId of day.dessertIds) {
             const dessert = desserts.get(dessertId);
-            if (!dessert || (dessert.archivedAt && !currentDesserts.includes(dessertId))) {
+            const isNew = !currentDesserts.includes(dessertId);
+            if (!dessert || (isNew && (dessert.archivedAt || dessert.canteenId !== canteen.id))) {
               throw invalid('Dessert not available', [{ path: 'dessertId', message: dessertId }]);
             }
           }
@@ -303,9 +337,10 @@ export class MenuService {
               where: { menuItemId: r.fromId, status: { not: 'CANCELLED' } },
               select: { employeeId: true },
             });
+            // The old item is kept on the row, so the employee can be told which dish changed.
             const moved = await tx.registration.updateMany({
               where: { menuItemId: r.fromId, status: { not: 'CANCELLED' } },
-              data: { menuItemId: replacement.id },
+              data: { menuItemId: replacement.id, replacedFromItemId: r.fromId },
             });
             effects.movedRegistrations += moved.count;
             if (regs.length > 0) {
@@ -377,6 +412,8 @@ export class MenuService {
           };
         }
 
+        if (gaps.length > 0) throw incomplete(gaps);
+
         const recipients = new Set<string>();
         for (const n of notices) {
           await tx.notification.createMany({
@@ -419,10 +456,27 @@ export class MenuService {
   async publish(actorId: string, factoryId: string, weekId: string): Promise<MenuWeekView> {
     const week = await this.prisma.menuWeek.findUnique({
       where: { id: weekId },
-      include: { canteen: true },
+      include: {
+        canteen: true,
+        days: {
+          include: {
+            items: { where: { removedAt: null }, select: { id: true } },
+            desserts: { where: { removedAt: null }, select: { id: true } },
+          },
+        },
+      },
     });
     if (!week || week.factoryId !== factoryId) throw notFound('Menu week not found');
     if (week.status !== 'DRAFT') throw invalidState('Menu week is already published');
+    const gaps = menuWeekGaps(
+      week.days.map((d) => ({
+        date: fromDb(d.date),
+        isServing: d.isServing,
+        mainCount: d.items.length,
+        dessertCount: d.desserts.length,
+      })),
+    );
+    if (gaps.length > 0) throw incomplete(gaps);
 
     const weekStart = fromDb(week.weekStart);
     const now = this.clock.now();
@@ -464,6 +518,33 @@ export class MenuService {
   }
 
   /**
+   * Publishes straight from the builder, without a separate "save draft" step (product owner,
+   * 2026-10-23): the days are saved, then the week is published. Every serving day must have a
+   * main dish and a dessert; that is checked on the submitted days before anything is written,
+   * and again by `publish` on the stored week.
+   */
+  async saveAndPublish(
+    actorId: string,
+    factoryId: string,
+    input: MenuWeekSave,
+  ): Promise<MenuWeekView> {
+    const gaps = menuWeekGaps(
+      input.days.map((d) => ({
+        date: d.date,
+        isServing: d.isServing,
+        mainCount: d.items.length,
+        dessertCount: d.dessertIds.length,
+      })),
+    );
+    if (gaps.length > 0) throw incomplete(gaps);
+    const saved = await this.save(actorId, factoryId, input);
+    if (saved.menu.status !== 'DRAFT' || saved.menu.id === null) {
+      throw invalidState('Menu week is already published');
+    }
+    return this.publish(actorId, factoryId, saved.menu.id);
+  }
+
+  /**
    * BR-02 / BR-15 / BR-63: an employee sees the published menu of their meal unit's canteen and
    * never a draft. Employees on the "unassigned" list see no menu.
    */
@@ -471,12 +552,12 @@ export class MenuService {
     assertMonday(weekStart);
     const employee = await this.prisma.employee.findUniqueOrThrow({
       where: { id: employeeId },
-      select: { orgUnitId: true, costCenterOverrideId: true },
+      select: { orgUnitId: true, floorOverrideId: true },
     });
     const org = await loadOrg(this.prisma, factoryId);
     const assignment = resolveEmployeeMealAssignment({
       orgUnitId: employee.orgUnitId,
-      costCenterOverrideId: employee.costCenterOverrideId,
+      floorOverrideId: employee.floorOverrideId,
       index: org.index,
     });
     if (!assignment.canRegister || !assignment.canteenId) return { state: 'UNASSIGNED', weekStart };
@@ -503,11 +584,25 @@ export class MenuService {
   }
 
   private displayName(
-    dishes: Map<string, { name: string; type: DishType }>,
+    dishes: Map<string, { name: string; type: { name: string } }>,
     dishId: string,
   ): string {
     const dish = dishes.get(dishId);
-    return dish ? mealDisplayName(dish.type, dish.name) : dishId;
+    return dish ? mealDisplayName(dish.type.name, dish.name) : dishId;
+  }
+
+  /** BR-13: each dish type's usual bounds per serving day (inactive types are not checked). */
+  private async mixRules(factoryId: string): Promise<MenuMixRule[]> {
+    const types = await this.prisma.dishType.findMany({
+      where: { factoryId, active: true },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    });
+    return types.map((t) => ({
+      typeId: t.id,
+      typeName: t.name,
+      minPerDay: t.minPerDay,
+      maxPerDay: t.maxPerDay,
+    }));
   }
 
   private async loadDishes(db: Db, factoryId: string, input: MenuWeekSave) {
@@ -523,7 +618,10 @@ export class MenuService {
       select: { dishId: true },
     });
     current.forEach((c) => ids.add(c.dishId));
-    const rows = await db.dish.findMany({ where: { factoryId, id: { in: [...ids] } } });
+    const rows = await db.dish.findMany({
+      where: { factoryId, id: { in: [...ids] } },
+      include: { type: true },
+    });
     return new Map(rows.map((r) => [r.id, r]));
   }
 

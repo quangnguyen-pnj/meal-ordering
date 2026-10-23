@@ -266,11 +266,11 @@ export class MyRegistrationsService {
   private async rowsWithNames(employeeId: string, dates: string[]) {
     const rows = await this.prisma.registration.findMany({
       where: { employeeId, date: { in: dates.map(toDb) }, session: SESSION },
-      select: { ...REG_ROW_SELECT, menuItem: { select: { dish: true } } },
+      select: { ...REG_ROW_SELECT, menuItem: { select: { dish: { include: { type: true } } } } },
     });
     return rows.map((r) => ({
       ...r,
-      displayName: mealDisplayName(r.menuItem.dish.type, r.menuItem.dish.name),
+      displayName: mealDisplayName(r.menuItem.dish.type.name, r.menuItem.dish.name),
     }));
   }
 
@@ -287,11 +287,15 @@ export class MyRegistrationsService {
     const [rows, lines] = await Promise.all([
       this.prisma.registration.findMany({
         where: { employeeId: p.employeeId, date: range },
-        select: { ...REG_ROW_SELECT, menuItem: { select: { dish: true } } },
+        select: { ...REG_ROW_SELECT, menuItem: { select: { dish: { include: { type: true } } } } },
       }),
       this.prisma.forecastLine.findMany({
         where: { employeeId: p.employeeId, date: range },
-        select: { date: true, quantity: true, menuItem: { select: { dish: true } } },
+        select: {
+          date: true,
+          quantity: true,
+          menuItem: { select: { dish: { include: { type: true } } } },
+        },
       }),
     ]);
     // Weeks with a forecast: a day of such a week without lines had a forecast of 0.
@@ -328,12 +332,13 @@ export class MyRegistrationsService {
     for (const l of lines) {
       const e = entry(fromDb(l.date));
       e.forecast = (e.forecast ?? 0) + l.quantity;
-      meal(e, mealDisplayName(l.menuItem.dish.type, l.menuItem.dish.name)).forecast += l.quantity;
+      meal(e, mealDisplayName(l.menuItem.dish.type.name, l.menuItem.dish.name)).forecast +=
+        l.quantity;
     }
     for (const r of rows) {
       if (r.quantity <= 0) continue;
       const e = entry(fromDb(r.date));
-      const m = meal(e, mealDisplayName(r.menuItem.dish.type, r.menuItem.dish.name));
+      const m = meal(e, mealDisplayName(r.menuItem.dish.type.name, r.menuItem.dish.name));
       if (r.status === 'ACTIVE') {
         e.actual += r.quantity;
         m.actual += r.quantity;
@@ -385,7 +390,7 @@ export class MyRegistrationsService {
         name: true,
         registrations: {
           where: { date: toDb(date), session: SESSION, status: 'ACTIVE', quantity: { gt: 0 } },
-          select: { quantity: true, menuItem: { select: { dish: true } } },
+          select: { quantity: true, menuItem: { select: { dish: { include: { type: true } } } } },
         },
       },
       take: 500,
@@ -398,7 +403,7 @@ export class MyRegistrationsService {
         key: m.id,
         name: m.name,
         meals: m.registrations.map((r) => ({
-          displayName: mealDisplayName(r.menuItem.dish.type, r.menuItem.dish.name),
+          displayName: mealDisplayName(r.menuItem.dish.type.name, r.menuItem.dish.name),
           quantity: r.quantity,
         })),
         eating: m.registrations.length > 0,

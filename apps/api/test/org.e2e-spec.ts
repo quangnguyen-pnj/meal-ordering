@@ -37,8 +37,8 @@ async function mappingSnapshot() {
     orderBy: { id: 'asc' },
   });
   const overrides = await db().employee.findMany({
-    where: { costCenterOverrideId: { not: null } },
-    select: { employeeCode: true, costCenterOverrideId: true },
+    where: { floorOverrideId: { not: null } },
+    select: { employeeCode: true, floorOverrideId: true },
     orderBy: { employeeCode: 'asc' },
   });
   return { units, overrides };
@@ -240,7 +240,7 @@ describe('BR-64: mapping export and import', () => {
       orgRow('XCT', 'T1', null, 'CC03'), // valid on its own
       orgRow('KVP', 'T9', null, null), // unknown floor
       orgRow('NOPE', null, null, null), // unknown node
-      ['EMPLOYEE', DEMO.employee, '', 'T1', null, 'CC01'], // employees take no floor (BR-63)
+      ['EMPLOYEE', DEMO.employee, '', 'T1', null, 'CC01'], // only the pick-up floor (BR-63)
     ]);
     const res = await upload(hc, file).expect(201);
     const view: MappingImportView = res.body;
@@ -249,7 +249,12 @@ describe('BR-64: mapping export and import', () => {
     expect(view.errors).toEqual([
       { rowNumber: 3, field: 'floorCode', code: 'FLOOR_UNKNOWN', value: 'T9' },
       { rowNumber: 4, field: 'code', code: 'ORG_UNKNOWN', value: 'NOPE' },
-      { rowNumber: 5, field: 'floorCode', code: 'EMPLOYEE_FLOOR_OR_CANTEEN', value: 'T1' },
+      {
+        rowNumber: 5,
+        field: 'costCenterCode',
+        code: 'EMPLOYEE_CANTEEN_OR_COST_CENTER',
+        value: 'CC01',
+      },
     ]);
     expect(await mappingSnapshot()).toEqual(before);
     expect(await db().auditLog.count()).toBe(auditsBefore);
@@ -264,7 +269,7 @@ describe('BR-64: mapping export and import', () => {
       orgRow('XCT', 'T1', null, 'CC03'), // floor T2 -> T1
       orgRow('KHO-XH', null, null, 'CC09'), // cost center for the "missing" list
       orgRow('IT', 'T4', null, 'CC06'), // unchanged: not in the preview
-      ['EMPLOYEE', DEMO.employee, '', null, null, 'CC01'],
+      ['EMPLOYEE', DEMO.employee, '', 'T1', null, null],
     ]);
     const preview: MappingImportView = (await upload(hc, file).expect(201)).body;
     expect(preview.status).toBe('PREVIEW');
@@ -288,8 +293,8 @@ describe('BR-64: mapping export and import', () => {
     );
     expect(
       (await db().employee.findUniqueOrThrow({ where: { employeeCode: DEMO.employee } }))
-        .costCenterOverrideId,
-    ).toBe('cc_CC01');
+        .floorOverrideId,
+    ).toBe('fl_T1');
     const audit = await db().auditLog.findFirstOrThrow({
       where: { entityId: 'ou_XCT', action: 'orgUnit.mapping.updated' },
       orderBy: { at: 'desc' },
@@ -301,12 +306,12 @@ describe('BR-64: mapping export and import', () => {
   it('BR-64: re-importing the exported file restores the mapping (blank = inherit)', async () => {
     const preview: MappingImportView = (await upload(hc, exported, 'export.xlsx').expect(201)).body;
     expect(preview.status).toBe('PREVIEW');
-    // The exported file has no override row for the employee, so their override stays.
+    // The exported file has no row for the employee, so their pick-up floor stays.
     expect(preview.changes.map((c) => c.code).sort()).toEqual(['KHO-XH', 'XCT']);
     await hc.post(`/api/admin/org/mapping/imports/${preview.id}/apply`).expect(200);
     await hc
-      .put(`/api/employees/${DEMO.employee}/cost-center-override`)
-      .send({ costCenterId: null })
+      .put(`/api/employees/${DEMO.employee}/floor-override`)
+      .send({ floorId: null, reason: 'Về lại tầng của đơn vị' })
       .expect(200);
     expect((await db().orgUnit.findUniqueOrThrow({ where: { id: 'ou_XCT' } })).floorId).toBe(
       'fl_T2',
@@ -328,7 +333,13 @@ describe('BR-64 exit criterion: changing a mapping leaves existing snapshot rows
     });
     // A minimal snapshot as the close-week job (P2) will write it, with the mapping in effect.
     const dish = await db().dish.create({
-      data: { factoryId: 'fac_gv', name: 'Snapshot test', type: 'MAN', sessions: ['LUNCH'] },
+      data: {
+        factoryId: 'fac_gv',
+        canteenId: 'ct_gv',
+        name: 'Snapshot test',
+        typeId: 'dt_fac_gv_MAN',
+        sessions: ['LUNCH'],
+      },
     });
     const week = await db().menuWeek.create({
       data: {
@@ -364,8 +375,8 @@ describe('BR-64 exit criterion: changing a mapping leaves existing snapshot rows
       .body as MappingImportView;
     await hc.post(`/api/admin/org/mapping/imports/${preview.id}/apply`).expect(200);
     await hc
-      .put(`/api/employees/${DEMO.employee}/cost-center-override`)
-      .send({ costCenterId: 'cc_CC10' })
+      .put(`/api/employees/${DEMO.employee}/floor-override`)
+      .send({ floorId: 'fl_T1', reason: 'Ngồi ở tầng 1' })
       .expect(200);
 
     expect(await db().forecastLine.findUniqueOrThrow({ where: { id: line.id } })).toEqual(line);
@@ -384,8 +395,8 @@ describe('BR-64 exit criterion: changing a mapping leaves existing snapshot rows
       data: { floorId: 'fl_T2', costCenterId: 'cc_CC03' },
     });
     await hc
-      .put(`/api/employees/${DEMO.employee}/cost-center-override`)
-      .send({ costCenterId: null })
+      .put(`/api/employees/${DEMO.employee}/floor-override`)
+      .send({ floorId: null, reason: 'Về lại tầng của đơn vị' })
       .expect(200);
   });
 });
@@ -568,8 +579,8 @@ describe('403 on every org, master and sync endpoint', () => {
     { method: 'patch', url: '/api/admin/master/cost-centers/cc_CC01', body: { name: 'X' } },
     {
       method: 'put',
-      url: `/api/employees/${DEMO.employee}/cost-center-override`,
-      body: { costCenterId: null },
+      url: `/api/employees/${DEMO.employee}/floor-override`,
+      body: { floorId: null, reason: 'x' },
     },
   ];
 
