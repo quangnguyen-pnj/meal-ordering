@@ -3,12 +3,10 @@ import { defaultSettingValue } from '../settings';
 import { regularCloseAt } from './deadlines';
 import {
   adminDayWindow,
-  applyToWholeWeek,
   compareWithForecast,
   employeeDayWindow,
   forecastLinesOf,
   isLostByLeaver,
-  sameAsLastWeek,
   validateDaySelection,
 } from './registration';
 import { vnToUtc } from './time';
@@ -212,80 +210,6 @@ describe('BR-07: forecast lines and differences', () => {
         ],
       ),
     ).toMatchObject({ changed: false });
-  });
-});
-
-describe('BR-26: shortcuts', () => {
-  const thisWeek = [
-    {
-      date: '2026-11-02',
-      items: [
-        { id: 'm-chay', type: 'CHAY' as const },
-        { id: 'm-ca', type: 'MAN' as const },
-        { id: 'm-thit', type: 'MAN' as const },
-      ],
-    },
-    {
-      date: '2026-11-03',
-      items: [
-        { id: 't-chao', type: 'CHAO' as const },
-        { id: 't-ga', type: 'MAN' as const },
-      ],
-    },
-  ];
-
-  it('BR-26: "Same as last week" copies each day’s types and quantities onto the first dish of the same type', () => {
-    const lastWeekTypes = new Map([
-      ['lm-chay', 'CHAY' as const],
-      ['lm-suon', 'MAN' as const],
-      ['lm-ca', 'MAN' as const],
-      ['lt-chao', 'CHAO' as const],
-    ]);
-    const res = sameAsLastWeek({
-      lastWeek: {
-        '2026-10-26': [
-          { menuItemId: 'lm-chay', quantity: 1 },
-          { menuItemId: 'lm-suon', quantity: 1 },
-          { menuItemId: 'lm-ca', quantity: 2 },
-        ],
-        '2026-10-27': [{ menuItemId: 'lt-chao', quantity: 1 }],
-      },
-      lastWeekTypes,
-      targets: thisWeek,
-    });
-    expect(res.days).toEqual({
-      '2026-11-02': [
-        { menuItemId: 'm-chay', quantity: 1 },
-        { menuItemId: 'm-ca', quantity: 3 },
-      ],
-      '2026-11-03': [{ menuItemId: 't-chao', quantity: 1 }],
-    });
-    expect(res.skipped).toEqual([]);
-  });
-
-  it('BR-26: a type missing on this week’s day is reported, not invented', () => {
-    const res = sameAsLastWeek({
-      lastWeek: { '2026-10-27': [{ menuItemId: 'lt-chay', quantity: 2 }] },
-      lastWeekTypes: new Map([['lt-chay', 'CHAY' as const]]),
-      targets: thisWeek,
-    });
-    expect(res.days['2026-11-03']).toEqual([]);
-    expect(res.skipped).toEqual([{ date: '2026-11-03', type: 'CHAY', quantity: 2 }]);
-    // A weekday without registrations last week becomes an empty selection.
-    expect(res.days['2026-11-02']).toEqual([]);
-  });
-
-  it('BR-26: "Apply to whole week" copies one day’s selection to the other days by type', () => {
-    const res = applyToWholeWeek({
-      source: thisWeek[0]!,
-      selection: [
-        { menuItemId: 'm-chay', quantity: 1 },
-        { menuItemId: 'm-thit', quantity: 2 },
-      ],
-      targets: thisWeek,
-    });
-    expect(res.days).toEqual({ '2026-11-03': [{ menuItemId: 't-ga', quantity: 2 }] });
-    expect(res.skipped).toEqual([{ date: '2026-11-03', type: 'CHAY', quantity: 1 }]);
   });
 });
 

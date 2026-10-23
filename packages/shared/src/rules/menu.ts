@@ -53,16 +53,15 @@ export function checkMenuMix(types: readonly DishType[]): MenuMixCheck {
 }
 
 /**
- * BR-08: the days a menu week offers. Monday–Saturday are always listed so the HC admin can turn
- * Saturday on per week; Sunday only when the `servingDays` setting includes it.
+ * BR-08: the days a menu week offers. Monday–Sunday are always listed so the HC admin can turn
+ * Saturday or Sunday on per week (product owner, 2026-10-23: Sunday was missing). Which days serve
+ * by default still comes from the `servingDays` setting (`isDefaultServingDay`).
  */
-export function menuWeekDates(weekStart: DateString, servingDays: readonly number[]): DateString[] {
+export function menuWeekDates(weekStart: DateString): DateString[] {
   if (isoWeekdayOf(weekStart) !== 1) {
     throw new RangeError(`weekStart must be a Monday, got ${weekStart}`);
   }
-  const days = [0, 1, 2, 3, 4, 5].map((offset) => addDays(weekStart, offset));
-  if (servingDays.includes(7)) days.push(addDays(weekStart, 6));
-  return days;
+  return [0, 1, 2, 3, 4, 5, 6].map((offset) => addDays(weekStart, offset));
 }
 
 /** BR-08: a day serves by default when its weekday is in the `servingDays` setting. */

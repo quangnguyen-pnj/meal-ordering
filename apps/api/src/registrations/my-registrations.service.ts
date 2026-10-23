@@ -54,7 +54,7 @@ export function assertMonday(weekStart: string): void {
 }
 
 /**
- * An employee's own registration (BR-20 to BR-24, BR-26 is client-side), the /today part of it,
+ * An employee's own registration (BR-20 to BR-24), the /today part of it,
  * history, and the colleagues view (BR-27).
  */
 @Injectable()

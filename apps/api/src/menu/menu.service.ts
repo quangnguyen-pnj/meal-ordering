@@ -111,9 +111,7 @@ export class MenuService {
     ]);
     const published = week !== null && week.status !== 'DRAFT';
     const stored = new Map((week?.days ?? []).map((d) => [fromDb(d.date), d]));
-    const dates = [
-      ...new Set([...menuWeekDates(ref.weekStart, servingDays), ...stored.keys()]),
-    ].sort();
+    const dates = [...new Set([...menuWeekDates(ref.weekStart), ...stored.keys()])].sort();
 
     const days: MenuDayView[] = dates.map((date) => {
       const d = stored.get(date);

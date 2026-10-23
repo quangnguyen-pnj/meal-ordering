@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { formatRange, formatWeekRange } from '@/lib/utils';
+import { formatRange, formatWeekNumber, formatWeekRange } from '@/lib/utils';
 import { shortOrgPath } from '../screens/employees-screen';
 import { useConfirm } from '@/components/confirm-dialog';
 import { ResponsiveSelect } from '@/components/responsive-select';
@@ -101,6 +101,8 @@ describe('display helpers', () => {
   it('shows a week as its Monday to Sunday range', () => {
     expect(formatWeekRange('2026-10-26')).toBe('26/10 – 01/11/2026');
     expect(formatWeekRange('2026-12-28')).toBe('28/12 – 03/01/2027');
+    expect(formatWeekNumber('2026-10-26')).toBe('Tuần 44');
+    expect(formatWeekNumber('2026-12-28')).toBe('Tuần 53');
   });
 
   it('shows which page of a list is on screen', () => {

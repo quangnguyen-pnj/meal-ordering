@@ -39,8 +39,8 @@ describe('BR-13: usual menu mix', () => {
 describe('BR-08: serving days', () => {
   const servingDays = defaultSettingValue('servingDays');
 
-  it('BR-08: a week offers Monday to Saturday, serving Monday to Friday by default', () => {
-    const dates = menuWeekDates('2026-11-02', servingDays);
+  it('BR-08: a week offers Monday to Sunday, serving Monday to Friday by default', () => {
+    const dates = menuWeekDates('2026-11-02');
     expect(dates).toEqual([
       '2026-11-02',
       '2026-11-03',
@@ -48,6 +48,7 @@ describe('BR-08: serving days', () => {
       '2026-11-05',
       '2026-11-06',
       '2026-11-07',
+      '2026-11-08',
     ]);
     expect(dates.map((d) => isDefaultServingDay(d, servingDays))).toEqual([
       true,
@@ -56,15 +57,17 @@ describe('BR-08: serving days', () => {
       true,
       true,
       false,
+      false,
     ]);
   });
 
-  it('BR-08: Sunday is offered only when the servingDays setting includes it', () => {
-    expect(menuWeekDates('2026-11-02', [1, 2, 3, 4, 5, 6, 7])).toHaveLength(7);
+  it('BR-08: Sunday is offered even when the servingDays setting leaves it out', () => {
+    expect(menuWeekDates('2026-11-02').at(-1)).toBe('2026-11-08');
+    expect(isDefaultServingDay('2026-11-08', [1, 2, 3, 4, 5, 6, 7])).toBe(true);
   });
 
   it('BR-08: weekStart must be a Monday', () => {
-    expect(() => menuWeekDates('2026-11-03', servingDays)).toThrow(RangeError);
+    expect(() => menuWeekDates('2026-11-03')).toThrow(RangeError);
   });
 });
 
