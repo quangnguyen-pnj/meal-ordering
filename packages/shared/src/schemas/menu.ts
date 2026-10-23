@@ -1,8 +1,20 @@
 import { z } from 'zod';
 import type { DishType, MenuWeekStatus } from '../enums';
 import type { MenuMixCheck } from '../rules/menu';
+import { parseDateString } from '../rules/time';
 
-export const DateStringSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD');
+/** A calendar date `YYYY-MM-DD` that exists (no 2027-02-30). */
+export const DateStringSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD')
+  .refine((value) => {
+    try {
+      parseDateString(value);
+      return true;
+    } catch {
+      return false;
+    }
+  }, 'Invalid calendar date');
 
 /** BR-11: the HC admin saves a whole week of one canteen at once. */
 export const MenuWeekSaveSchema = z.object({

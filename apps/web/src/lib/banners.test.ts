@@ -32,6 +32,8 @@ describe('banners', () => {
       },
     ]);
     expect(b!.dismissId).toBe('n1');
+    // A replacement needs nothing from the employee, so no action.
+    expect(b!.action).toBeUndefined();
     expect(b!.message).toBe(
       'Thực đơn ngày 01/03/2027: món [Mặn] Cá kho tộ được đổi thành [Mặn] Sườn ram. Suất bạn đã đăng ký đã chuyển sang món mới.',
     );
@@ -55,5 +57,19 @@ describe('banners', () => {
     expect(notice({ date: '2027-03-01', dish: 'Mặn Cá kho tộ' })).toContain(
       'trước giờ khóa ngày đó',
     );
+  });
+
+  it('BR-14: a removed-dish notice links to the week screen to reselect', () => {
+    const [b] = toBanners([
+      {
+        id: 'notification:n3',
+        severity: 'info',
+        kind: 'NOTIFICATION',
+        notificationId: 'n3',
+        notificationType: 'MENU_DISH_REMOVED',
+        params: { date: '2027-03-01', dish: 'Mặn Cá kho tộ', lockTime: '08:00' },
+      },
+    ]);
+    expect(b!.action).toEqual({ href: '/week', label: 'Chọn lại món' });
   });
 });

@@ -73,7 +73,12 @@ describe('role-based navigation (plan section 3 matrix)', () => {
   it('marks only screens that exist as available; the rest show "Sắp có"', () => {
     const available = NAV_ITEMS.filter((i) => i.available).map((i) => i.href);
     expect(available).toEqual([
+      '/today',
       '/week',
+      '/team',
+      '/history',
+      '/admin/registrations',
+      '/admin/print',
       '/admin/dishes',
       '/admin/menu',
       '/admin/master',

@@ -8,6 +8,8 @@ import { ApiException, invalidState } from '../common/api-error';
 import { DMP_CLIENT, type DmpClient, type DmpEmployee, type DmpOrgNode } from '../dmp/dmp.client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SystemAdminBootstrap } from '../rbac/system-admin-bootstrap.service';
+import { cancelLeaversMeals } from '../registrations/forecast.service';
+import { SettingsService } from '../settings/settings.service';
 import { recomputeMealUnits } from './org-index';
 
 /** Postgres advisory-lock key, so two org syncs never write at the same time. */
@@ -29,6 +31,8 @@ export interface OrgSyncDetails {
   skippedEmployees: Array<{ employeeCode: string; orgUnitCode: string }>;
   /** Employees in the database that DMP no longer returns (left unchanged, open question Q13). */
   missingFromDmp: number;
+  /** BR-36: registrations cancelled because their day is on or after the employee's end date. */
+  mealsCancelledForLeavers: number;
 }
 
 /**
@@ -49,6 +53,7 @@ export class OrgSyncService {
     private readonly clock: ClockService,
     private readonly audit: AuditService,
     private readonly bootstrap: SystemAdminBootstrap,
+    private readonly settings: SettingsService,
     @Inject(DMP_CLIENT) private readonly dmp: DmpClient,
   ) {}
 
@@ -259,6 +264,13 @@ export class OrgSyncService {
     // BR-60: meal units follow the (possibly moved) tree.
     const mealUnitsRecomputed = await recomputeMealUnits(tx, factoryId);
 
+    // BR-36: leavers lose their meals from their end date.
+    const mealsCancelledForLeavers = await cancelLeaversMeals(tx, this.audit, {
+      factoryId,
+      now: this.clock.now(),
+      lockTime: await this.settings.get(factoryId, 'day.lockTime'),
+    });
+
     return {
       orgUnits,
       employees,
@@ -267,6 +279,7 @@ export class OrgSyncService {
       skippedEmployees: skipped.slice(0, 200),
       // TODO(BR-36): what an employee missing from DMP means is open (open-questions Q13).
       missingFromDmp: current.filter((e) => !seenCodes.has(e.employeeCode)).length,
+      mealsCancelledForLeavers,
     };
   }
 }

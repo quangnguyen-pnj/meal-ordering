@@ -18,6 +18,7 @@ import { MenuModule } from './menu/menu.module';
 import { OrgModule } from './org/org.module';
 import { PrismaModule } from './prisma/prisma.service';
 import { RbacModule } from './rbac/rbac.module';
+import { RegistrationsModule } from './registrations/registrations.module';
 import { SettingsModule } from './settings/settings.module';
 import { SystemModule } from './system/system.module';
 
@@ -43,6 +44,7 @@ export class AppModule {
         OrgModule,
         DishesModule,
         MenuModule,
+        RegistrationsModule,
         MeModule,
         JobsModule,
         SystemModule,

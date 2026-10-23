@@ -32,6 +32,10 @@ export function toBanners(views: readonly BannerView[]): Banner[] {
       severity: b.severity,
       message: template.replace(/\{(\w+)\}/g, (m, name: string) => params[name] ?? m),
       dismissId: b.notificationId,
+      // BR-14: a removed dish has to be reselected on the week screen before the lock.
+      ...(type === 'MENU_DISH_REMOVED'
+        ? { action: { href: '/week', label: t('banners.reselect') } }
+        : {}),
     };
   });
 }

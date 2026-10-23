@@ -10,6 +10,7 @@ import { ENV, type AppEnv } from '../config/env';
 import { MeService } from '../me/me.service';
 import { OrgSyncService } from '../org/org-sync.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ForecastService } from '../registrations/forecast.service';
 
 const TZ = 'Asia/Ho_Chi_Minh';
 
@@ -26,6 +27,13 @@ export const JOBS = {
    * and checks the setting, so moving the warning time needs no new schedule.
    */
   menuPublishWarning: { name: 'menu-publish-warning', cron: '0 * * * *' },
+  /**
+   * BR-07: the forecast snapshot at each week's closeAt. closeAt differs per week (BR-04), so
+   * the job runs every minute and snapshots whatever is due; requests also catch up (plan 6.5).
+   */
+  closeWeek: { name: 'close-week', cron: '* * * * *' },
+  /** BR-14: registrations still waiting for reselection are cancelled at the day's lock. */
+  reselectDeadline: { name: 'reselect-deadline', cron: '* * * * *' },
 } as const;
 
 @Injectable()
@@ -38,6 +46,7 @@ export class JobsService implements OnApplicationBootstrap, OnApplicationShutdow
     private readonly prisma: PrismaService,
     private readonly orgSync: OrgSyncService,
     private readonly me: MeService,
+    private readonly forecast: ForecastService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -56,6 +65,8 @@ export class JobsService implements OnApplicationBootstrap, OnApplicationShutdow
     }
     await boss.work(JOBS.syncOrgEmployees.name, async () => this.syncOrgEmployees());
     await boss.work(JOBS.menuPublishWarning.name, async () => this.menuPublishWarning());
+    await boss.work(JOBS.closeWeek.name, async () => this.closeWeek());
+    await boss.work(JOBS.reselectDeadline.name, async () => this.reselectDeadline());
     this.boss = boss;
     this.logger.log(`Scheduled ${Object.keys(JOBS).length} jobs`);
   }
@@ -85,5 +96,19 @@ export class JobsService implements OnApplicationBootstrap, OnApplicationShutdow
       }
     }
     return count;
+  }
+
+  /** BR-07: idempotent; a week already snapshotted is skipped. */
+  async closeWeek(): Promise<number> {
+    const closed = await this.forecast.closeDueWeeks();
+    if (closed > 0) this.logger.log(`close-week: ${closed} forecast snapshot(s) taken`);
+    return closed;
+  }
+
+  /** BR-14: idempotent; only registrations still waiting for reselection change. */
+  async reselectDeadline(): Promise<number> {
+    const cancelled = await this.forecast.cancelUnselectedAtLock();
+    if (cancelled > 0) this.logger.log(`reselect-deadline: ${cancelled} registration(s) cancelled`);
+    return cancelled;
   }
 }

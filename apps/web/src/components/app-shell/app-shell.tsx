@@ -121,10 +121,10 @@ export function AppShell({
     <nav aria-label={t('nav.label')} className="flex flex-col gap-4 px-2 py-4 md:pt-0">
       {groups.map((group) => (
         <div key={group.key}>
-          <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <p className="px-3 pb-1 text-[0.6875rem] font-bold uppercase tracking-wide text-muted-foreground">
             {group.title}
           </p>
-          <ul className="flex flex-col gap-0.5">
+          <ul className="flex flex-col gap-0.5 font-medium">
             {group.items.map((item) => (
               <li key={item.href}>
                 <NavLink
@@ -142,7 +142,7 @@ export function AppShell({
 
   return (
     <div className="min-h-screen md:flex">
-      <header className="sticky top-0 z-30 flex h-14 items-center justify-between bg-card px-4 shadow-block md:hidden">
+      <header className="sticky top-0 z-30 flex h-14 items-center justify-between bg-card px-4 shadow-block md:hidden print:hidden">
         <span className="font-semibold">{t('app.name')}</span>
         <Button
           variant="ghost"
@@ -170,7 +170,7 @@ export function AppShell({
         </SheetContent>
       </Sheet>
 
-      <aside className="hidden bg-card shadow-block md:sticky md:top-0 md:flex md:h-screen md:w-64 md:shrink-0 md:flex-col md:overflow-y-auto">
+      <aside className="hidden bg-card shadow-block md:sticky md:top-0 md:flex md:h-screen md:w-64 md:shrink-0 md:flex-col md:overflow-y-auto print:hidden">
         <div className="px-4 py-5">
           <p className="text-lg font-semibold">{t('app.name')}</p>
           <p className="text-sm text-muted-foreground">{t('app.factory')}</p>
@@ -179,11 +179,14 @@ export function AppShell({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="hidden items-center justify-end gap-3 px-4 py-2 md:flex md:px-6">
+        <div className="hidden items-center justify-end gap-3 px-4 py-2 md:flex md:px-6 print:hidden">
           <UserBlock user={user} onSignOut={signOut} />
         </div>
-        <main className="flex flex-1 flex-col gap-5 p-4 md:gap-6 md:p-8">
-          <BannerArea banners={banners} />
+        <main className="flex flex-1 flex-col gap-5 p-4 md:gap-6 md:p-8 print:p-0">
+          {/* Paper forms (/admin/print) print the page content only. */}
+          <div className="print:hidden">
+            <BannerArea banners={banners} />
+          </div>
           {children}
         </main>
       </div>

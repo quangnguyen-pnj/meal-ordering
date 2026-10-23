@@ -12,6 +12,7 @@ import { MAPPING_TEMPLATE_HEADER } from '../src/org/mapping-import.service';
 import { OrgSyncService } from '../src/org/org-sync.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { SystemAdminBootstrap } from '../src/rbac/system-admin-bootstrap.service';
+import { SettingsService } from '../src/settings/settings.service';
 import {
   DEMO,
   closeDb,
@@ -396,6 +397,7 @@ describe('org and employee sync (plan section 5, BR-60, BR-61)', () => {
       app.get(ClockService),
       app.get(AuditService),
       app.get(SystemAdminBootstrap),
+      app.get(SettingsService),
     ] as const;
   const syncWith = (dmp: DmpClient) => new OrgSyncService(...services(), dmp);
 

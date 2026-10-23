@@ -11,7 +11,7 @@
     "allowJs": false,
     "incremental": true,
     "plugins": [{ "name": "next" }],
-    "paths": { "@/*": ["./src/*"] },
+    "paths": { "@/*": ["./src/*"], "vitest": ["./node_modules/vitest"] },
     "types": ["node", "vitest/globals", "@testing-library/jest-dom"]
   },
   "include": ["next-env.d.ts", "src", ".next/types/**/*.ts", "*.ts", "*.mjs"],

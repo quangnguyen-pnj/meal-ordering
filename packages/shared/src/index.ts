@@ -5,4 +5,5 @@ export * from './schemas/admin';
 export * from './schemas/master';
 export * from './schemas/menu';
 export * from './schemas/org';
+export * from './schemas/registration';
 export * from './rules';

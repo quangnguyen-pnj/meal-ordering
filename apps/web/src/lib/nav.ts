@@ -22,7 +22,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     group: 'mine',
     action: 'menu.registerOwn',
     phase: 'P2',
-    available: false,
+    available: true,
   },
   {
     href: '/week',
@@ -38,7 +38,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     group: 'mine',
     action: 'team.view',
     phase: 'P2',
-    available: false,
+    available: true,
   },
   {
     href: '/history',
@@ -46,7 +46,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     group: 'mine',
     action: 'menu.registerOwn',
     phase: 'P2',
-    available: false,
+    available: true,
   },
   {
     href: '/admin/today',
@@ -62,7 +62,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     group: 'admin',
     action: 'registration.onBehalf',
     phase: 'P2',
-    available: false,
+    available: true,
   },
   {
     href: '/admin/print',
@@ -70,7 +70,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     group: 'admin',
     action: 'registration.onBehalf',
     phase: 'P2',
-    available: false,
+    available: true,
   },
   {
     href: '/admin/dishes',

@@ -149,3 +149,53 @@ A UI/UX pass over every P1 screen, asked for after a review. No business rule ch
 - **Dropping a dish on a dish replaces it** (BR-14 once published); dropping it anywhere else on the day adds it; a dessert always joins the day. With a pointer the dish under the cursor wins over its day (`pointerWithin`); keyboard drags use the nearest target. `resolveDrop` holds the rule and is unit-tested.
 - **Below 1024 px (`lg`)** the library is hidden, so each day shows "+ Thêm món" and each published dish its "Đổi thành" select. From 1024 px up both are hidden and drag and drop is the only way (by choice of the administration).
 - **Blocks are set apart by shadows, not borders**, on a faint warm page background (`--canvas`). Tokens in `tailwind.config.ts`: `shadow-block` (cards, panels, rows), `shadow-raised` (menus, popovers, select lists), `shadow-overlay` (dialogs, sheets, the drag copy). Not `shadow-card`: `card` is also a colour, and Tailwind would then generate a white shadow colour for the same class. Inputs keep their borders; tables keep light row dividers. Inner padding went from 12 to 16 px and page padding to 32 px on desktop.
+
+## Phase 2 – Registration
+
+### Rules (packages/shared)
+
+- `validateDaySelection` (BR-20): any dish of that day's published menu, several dishes and types, each a non-negative integer; no row or 0 means no meal. The same item twice in one selection is rejected as ambiguous. The `maxPerDay` option is the hook BR-20 keeps for a future cap; every caller passes nothing (no cap).
+- `employeeDayWindow` (BR-22 to BR-24): `OPEN` before closeAt and the day's lock, `AFTER_CLOSE` from closeAt (or once the snapshot exists) to the lock, `LOCKED` from `day.lockTime` on day D. A late closeAt never passes a day's own lock (BR-05).
+- `adminDayWindow` (BR-21, BR-25): `ON_BEHALF` until the lock, then `EXTRA` until finalization. Finalization (DayClose) is P4, so for now the extra window also ends when day D ends (Q20).
+- `forecastLinesOf` (BR-07): the forecast is active lines with a positive quantity. Lines waiting for reselection (BR-14) are not in it (Q21).
+- `compareWithForecast` (BR-23) gives per-meal forecast, actual and difference. Screens use it to mark a day "Khác dự báo".
+- `sameAsLastWeek` / `applyToWholeWeek` (BR-26) add up quantities by type and put them on the **first** dish of that type on the target day, as BR-26 says for "Same as last week". "Apply to whole week" uses the same rule for consistency. A type missing on the target day is reported, never invented. Nothing is saved until the user presses Save.
+- `isLostByLeaver` (BR-36): a leaver loses meals dated on or after `endDate`, unless that day's lock has already passed. Locked days are left to reconciliation (Q23).
+- `DateStringSchema` now rejects impossible dates (`2027-02-30`), so a bad path or query date is a 400, not a 500.
+
+### API
+
+- **New endpoints**, all behind the guard. Each admin endpoint has a 403 test: `/api/registrations/me/{week,day,days/:date,history}` (`menu.registerOwn`, self); `/api/team` and `/api/team/units/:orgUnitId` (`team.view`); `/api/admin/registrations/{units,progress,not-registered}` (list scope); `/api/admin/registrations/units/:orgUnitId/{grid,days/:date}` (`registration.onBehalf`, org-unit scope); `/api/admin/registrations/employees/:code/extras` (`registration.addExtra`, employee scope).
+- **Saves are all or nothing.** A week save validates every day first. One changed day that is locked rejects the whole save with `409 DAY_LOCKED` (new error code). A locked day sent unchanged is skipped, so `/week` can always send the full week. The grid saves one day for many employees; one bad row rejects the batch with `{ employeeCode, code, menuItemId? }` details.
+- **Rows are never deleted** (rule 7). Removing a meal keeps the row with quantity 0. Saving a day with a new selection resolves its "needs reselection" rows by cancelling them.
+- **The grid works on any org node in scope, not only meal units.** A dept admin assigned below a meal unit can still open their own team. Rows are employees below the node who can register, for one canteen at a time (the most common one by default). The response counts the employees it leaves out.
+- **Extras (BR-25)** reuse the employee's row for that meal (one row per employee and item in the plan's model): quantity goes up, `isExtra` and `extraReason` are set, and the audit log keeps each addition with its reason.
+- **Audit (BR-70):** employee changes after closeAt (`registration.changedAfterClose`), every admin on-behalf change per employee-day (`registration.onBehalf`), extras with their reason, the snapshot itself (`forecast.snapshot`), and each automatic cancellation (`registration.cancelledUnselected`, `registration.cancelledLeaver`, no actor). Employee edits before closeAt are not audited (neither admin actions nor changes after closeAt).
+- **"Now" for screens comes from the API** (`now` in the day view, `upcomingWeekStart` from `/units`, the history range), so the web never reads the clock and follows fake time. The week view defaults to the first of the next two weeks that is published and still before closeAt (J1).
+- `/team` shows only `key` (employee id), name, meals and eating; no code, no reason (BR-27). Search by code works on the server.
+- The not-registered list (BR-21) is everyone in scope who can register, whose canteen's menu is published, and who has no meal in the week (or on the chosen day) (Q22).
+
+### Forecast snapshot (BR-07)
+
+- **`close-week` runs every minute** and snapshots every published week whose closeAt has passed (closeAt differs per week under BR-04). `reselect-deadline` also runs every minute (BR-14 at the lock). Both are idempotent.
+- **Self-healing:** every registration request first takes any snapshot that is due, so a missed job never lets a later change into the forecast. Writes take `FOR SHARE` on the week row and the snapshot's conditional update takes the row lock. A write therefore lands either before the snapshot (it is in the forecast) or after it (it is a difference). After the lock, the write re-reads `closedAt` and audits accordingly.
+- Snapshot lines carry the meal unit, floor and cost center resolved at that moment, plus the week's canteen (BR-64). The week becomes `CLOSED`, which every menu screen already treats as published.
+
+### Jobs and sync
+
+- **BR-36 in the org sync:** after employees are written, registrations on or after a leaver's `endDate` are cancelled in the same transaction. The count is in `SyncRun.details.mealsCancelledForLeavers`. Employees whose `endDate` is set in DMP cannot register for those days either.
+- The BR-14 TODO in `menu.service.ts` is resolved by `ForecastService.cancelUnselectedAtLock`.
+
+### Web
+
+- Screens: `/week` (steppers, closeAt banner, BR-26 shortcuts, per-day lock and difference), `/today` (forecast vs current, countdown from server time, "Không ăn hôm nay", read-only after the lock), `/team`, `/history`, `/admin/registrations` (progress, not-registered, bulk grid with day tabs, Enter moves down, invalid cells on the row, extras with a reason after the lock), `/admin/print` (one table per day, same row order as the grid, browser print CSS).
+- **Built on the shadcn/ui conventions of the P1 UI review** (merged from main before P2 closed): `ResponsiveSelect` for every select, Radix `Tabs` (also the grid's day tabs), shadcn `Table`, `WeekNav` with "Về tuần sắp tới", `LoadingRows`, `useConfirm` instead of `window.confirm` (leaving unsaved changes, "Không ăn hôm nay"), `AppDialog` for extras, toasts for success with errors kept inline, `shadow-block` day blocks, and the full-width sticky save bar of /admin/settings. The P2 screens are now `available` in the navigation.
+- **Tablets keep the sidebar from `md`**, as main decided ("tables scroll sideways instead of squeezing columns"). At 768 px the bulk grid scrolls sideways with its name column pinned, so the row being typed is always identified. An earlier P2 draft moved the sidebar to `lg`; that was dropped in the merge.
+- **P2 copy uses "Đầu mối nhận cơm"** for the meal unit, as decided on main (2026-10-22): the progress table column, `/team`'s intro, and the grid's skipped-employees and row-error texts.
+- **A removed-dish notice (BR-14) links to `/week`** ("Chọn lại món"), because it now asks something of the employee before the lock.
+- `registration-draft.ts` and `grid-draft.ts` hold the screen logic as pure functions with unit tests. The P1 read-only `week-menu-screen.tsx` is replaced by the registration screen.
+
+### Tooling
+
+- **`apps/web/tsconfig.json` maps `vitest` to the app's own copy.** pnpm installs two copies of vite/vitest (one per `jiti` peer). `@testing-library/jest-dom`'s vitest types resolved the hoisted copy, so `vitest.config.ts` saw a `defineConfig` without `test` and `pnpm typecheck` failed on a fresh install.
+- **Linux without the embedded PostgreSQL's ICU 60:** run the API tests against a local server with `TEST_DATABASE_URL=postgresql://…/meal_test pnpm --filter @meal/api test`. Turbo does not pass that variable through, so run the API package directly. The e2e suite leaves write-once `ForecastLine` rows behind, so use a fresh database for each run.
