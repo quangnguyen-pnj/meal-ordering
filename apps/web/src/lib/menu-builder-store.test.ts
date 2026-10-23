@@ -1,7 +1,8 @@
 import type { MenuWeekView } from '@meal/shared';
 import { describe, expect, it } from 'vitest';
-import { createMenuBuilderStore } from './menu-builder-store';
+import { createMenuBuilderStore, draftGaps } from './menu-builder-store';
 
+const MAN = { id: 'dt_MAN', name: 'Mặn', color: '#b91c1c' };
 const view = {
   id: 'w1',
   canteenId: 'c1',
@@ -18,8 +19,8 @@ const view = {
       date: '2027-03-01',
       isServing: true,
       items: [
-        { id: 'i1', dishId: 'ca', dishName: 'Cá', type: 'MAN', displayName: '[Mặn] Cá' },
-        { id: 'i2', dishId: 'thit', dishName: 'Thịt', type: 'MAN', displayName: '[Mặn] Thịt' },
+        { id: 'i1', dishId: 'ca', dishName: 'Cá', type: MAN, displayName: '[Mặn] Cá' },
+        { id: 'i2', dishId: 'thit', dishName: 'Thịt', type: MAN, displayName: '[Mặn] Thịt' },
       ],
       desserts: [{ id: 'chuoi', name: 'Chuối' }],
       mix: null,
@@ -85,5 +86,17 @@ describe('menu builder store', () => {
     store.getState().removeItem('2027-03-01', 0);
     store.getState().removeDessert('2027-03-01', 'chuoi');
     expect(store.getState().days[0]).toMatchObject({ items: [{ id: 'i1' }], dessertIds: [] });
+  });
+
+  it('publishing waits for a main dish and a dessert on every serving day', () => {
+    const store = createMenuBuilderStore();
+    store.getState().load(view);
+    expect(draftGaps(store.getState().days)).toEqual([]);
+    store.getState().removeDessert('2027-03-01', 'chuoi');
+    store.getState().setServing('2027-03-06', true);
+    expect(draftGaps(store.getState().days)).toEqual([
+      { date: '2027-03-01', gaps: ['DESSERT'] },
+      { date: '2027-03-06', gaps: ['MAIN', 'DESSERT'] },
+    ]);
   });
 });

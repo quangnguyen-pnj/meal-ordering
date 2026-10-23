@@ -12,10 +12,11 @@ const day = (
   lockAt: '',
   items: items.map(([menuItemId, type, quantity]) => ({
     menuItemId,
-    type,
+    type: { id: type, name: type, color: '#000000' },
     quantity,
     forecast: 0,
     displayName: menuItemId,
+    replacedAfterClose: null,
   })),
   needsReselect: [],
   desserts: [],

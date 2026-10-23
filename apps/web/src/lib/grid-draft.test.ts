@@ -18,8 +18,12 @@ const view: RegistrationGridView = {
       window: 'ON_BEHALF',
       lockAt: '2026-11-02T01:00:00.000Z',
       items: [
-        { id: 'chay', displayName: '[Chay] A', type: 'CHAY' },
-        { id: 'ca', displayName: '[Mặn] B', type: 'MAN' },
+        {
+          id: 'chay',
+          displayName: '[Chay] A',
+          type: { id: 'CHAY', name: 'Chay', color: '#15803d' },
+        },
+        { id: 'ca', displayName: '[Mặn] B', type: { id: 'MAN', name: 'Mặn', color: '#b91c1c' } },
       ],
     },
   ],

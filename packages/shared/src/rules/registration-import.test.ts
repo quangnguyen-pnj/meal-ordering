@@ -7,7 +7,7 @@ const editable = new Map([
   [MON, new Set(['mon-ca', 'mon-chay'])],
   [TUE, new Set(['tue-ga'])],
 ]);
-const current = new Map([
+const current = new Map<string, Record<string, Record<string, number>>>([
   ['PNJP000001', { [MON]: { 'mon-ca': 1 } }],
   ['PNJP000002', {}],
 ]);

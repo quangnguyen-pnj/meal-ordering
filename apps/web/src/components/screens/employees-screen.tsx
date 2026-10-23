@@ -1,12 +1,18 @@
 'use client';
 
-import type { EmployeeMappingView, MasterItemView, ResetPinResult } from '@meal/shared';
+import type {
+  EmployeeMappingView,
+  MasterItemView,
+  OrgFilterOption,
+  ResetPinResult,
+} from '@meal/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { KeyRound, MoreHorizontal, Wallet } from 'lucide-react';
+import { Building2, KeyRound, MoreHorizontal } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AppDialog } from '@/components/app-dialog';
 import { returnFocus, useConfirm } from '@/components/confirm-dialog';
+import { OrgLevelFilter } from '@/components/org-level-filter';
 import { ResponsiveSelect } from '@/components/responsive-select';
 import { Alert } from '@/components/ui/alert';
 import {
@@ -51,6 +57,8 @@ const PAGE = 50;
 
 interface Filters {
   q: string;
+  /** Khối / Trung tâm / Phòng ban: employees at or below this node. */
+  orgUnitId: string;
   mealStatus: string;
   status: string;
   floorId: string;
@@ -78,6 +86,19 @@ function MealUnit({ e }: { e: EmployeeMappingView }) {
   );
 }
 
+function Floor({ e }: { e: EmployeeMappingView }) {
+  return (
+    <>
+      {e.floorName ?? t('common.none')}
+      {e.floorSource === 'OVERRIDE' ? (
+        <span className="block text-xs font-medium text-primary">
+          {vi.employees.floorSource.OVERRIDE}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
 function CostCenter({ e }: { e: EmployeeMappingView }) {
   return (
     <>
@@ -92,14 +113,16 @@ function CostCenter({ e }: { e: EmployeeMappingView }) {
 }
 
 /**
- * /admin/employees: scoped finder (dept admins see their units), meal unit and roles,
- * cost-center override (HC / system admin, BR-63) and PIN reset with a one-time temporary PIN.
+ * /admin/employees: scoped finder (dept admins see their units) with Khối / Trung tâm / Phòng
+ * ban filters, meal unit and roles, the pick-up floor of one employee (HC admin, BR-63; cost
+ * center follows the org tree) and PIN reset with a one-time temporary PIN.
  */
 export function EmployeesScreen({ canManageOrg }: { canManageOrg: boolean }) {
   const qc = useQueryClient();
   const [confirm, confirmElement] = useConfirm();
   const [filters, setFilters] = useState<Filters>({
     q: '',
+    orgUnitId: '',
     mealStatus: '',
     status: 'ACTIVE',
     floorId: '',
@@ -118,7 +141,8 @@ export function EmployeesScreen({ canManageOrg }: { canManageOrg: boolean }) {
     employee: EmployeeMappingView;
     trigger: HTMLElement | null;
   } | null>(null);
-  const [overrideCc, setOverrideCc] = useState('');
+  const [overrideFloor, setOverrideFloor] = useState('');
+  const [overrideReason, setOverrideReason] = useState('');
   const q = useDebounced(filters.q.trim());
 
   const query = new URLSearchParams({ offset: String(offset), limit: String(PAGE) });
@@ -127,6 +151,10 @@ export function EmployeesScreen({ canManageOrg }: { canManageOrg: boolean }) {
     queryKey: ['/employees', query.toString()],
     queryFn: () => api.get<{ total: number; items: EmployeeMappingView[] }>(`/employees?${query}`),
     placeholderData: (prev) => prev,
+  });
+  const orgUnits = useQuery({
+    queryKey: ['/employees/org-units'],
+    queryFn: () => api.get<{ items: OrgFilterOption[] }>('/employees/org-units'),
   });
   const floors = useQuery({
     queryKey: ['/admin/master/floors'],
@@ -151,8 +179,15 @@ export function EmployeesScreen({ canManageOrg }: { canManageOrg: boolean }) {
       setTempPin({ name: e.name, code: e.employeeCode, pin: res.temporaryPin, trigger }),
   });
   const setOverride = useMutation({
-    mutationFn: ({ code, costCenterId }: { code: string; costCenterId: string | null }) =>
-      api.put(`/employees/${encodeURIComponent(code)}/cost-center-override`, { costCenterId }),
+    mutationFn: ({
+      code,
+      floorId,
+      reason,
+    }: {
+      code: string;
+      floorId: string | null;
+      reason: string;
+    }) => api.put(`/employees/${encodeURIComponent(code)}/floor-override`, { floorId, reason }),
     onSuccess: () => {
       setOverrideFor(null);
       toast.success(t('employees.overrideSaved'));
@@ -204,7 +239,8 @@ export function EmployeesScreen({ canManageOrg }: { canManageOrg: boolean }) {
       resetPending={resetPin.isPending}
       onOverride={(trigger) => {
         setOverride.reset();
-        setOverrideCc(e.costCenterOverrideId ?? '');
+        setOverrideFloor(e.floorOverrideId ?? '');
+        setOverrideReason('');
         setOverrideFor({ employee: e, trigger });
       }}
       onResetPin={(trigger) => askResetPin(e, trigger)}
@@ -232,6 +268,12 @@ export function EmployeesScreen({ canManageOrg }: { canManageOrg: boolean }) {
               onChange={(e) => update({ q: e.target.value })}
             />
           </div>
+          <OrgLevelFilter
+            id="f-org"
+            options={orgUnits.data?.items ?? []}
+            value={filters.orgUnitId}
+            onChange={(orgUnitId) => update({ orgUnitId })}
+          />
           <div className="col-span-2 flex w-full flex-col gap-2 sm:w-56">
             <Label htmlFor="f-meal">{t('employees.mealStatus')}</Label>
             <ResponsiveSelect
@@ -302,7 +344,9 @@ export function EmployeesScreen({ canManageOrg }: { canManageOrg: boolean }) {
                       <MealUnit e={e} />
                     </dd>
                     <dt className="text-muted-foreground">{t('org.floor')}</dt>
-                    <dd>{e.floorName ?? t('common.none')}</dd>
+                    <dd>
+                      <Floor e={e} />
+                    </dd>
                     <dt className="text-muted-foreground">{t('org.costCenter')}</dt>
                     <dd>
                       <CostCenter e={e} />
@@ -355,7 +399,7 @@ export function EmployeesScreen({ canManageOrg }: { canManageOrg: boolean }) {
                       <MealUnit e={e} />
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
-                      {e.floorName ?? t('common.none')}
+                      <Floor e={e} />
                     </TableCell>
                     <TableCell className="min-w-44">
                       <CostCenter e={e} />
@@ -432,23 +476,34 @@ export function EmployeesScreen({ canManageOrg }: { canManageOrg: boolean }) {
           onSubmit={(e) => {
             e.preventDefault();
             if (!overrideFor) return;
+            if (!overrideFor || setOverride.isPending) return;
             setOverride.mutate({
               code: overrideFor.employee.employeeCode,
-              costCenterId: overrideCc || null,
+              floorId: overrideFloor || null,
+              reason: overrideReason.trim(),
             });
           }}
         >
-          <Label htmlFor="override-cc">{t('org.costCenter')}</Label>
+          <Label htmlFor="override-floor">{t('org.floor')}</Label>
           <ResponsiveSelect
-            id="override-cc"
-            value={overrideCc}
-            onValueChange={setOverrideCc}
+            id="override-floor"
+            value={overrideFloor}
+            onValueChange={setOverrideFloor}
             options={[
               { value: '', label: t('employees.clearOverride') },
-              ...(costCenters.data?.items ?? [])
-                .filter((c) => c.active)
-                .map((c) => ({ value: c.id, label: `${c.code} · ${c.name}` })),
+              ...(floors.data?.items ?? [])
+                .filter((f) => f.active)
+                .map((f) => ({ value: f.id, label: `${f.code} · ${f.name}` })),
             ]}
+          />
+          <Label htmlFor="override-reason">{t('employees.overrideReason')}</Label>
+          <Input
+            id="override-reason"
+            required
+            maxLength={500}
+            placeholder={t('employees.overrideReasonPlaceholder')}
+            value={overrideReason}
+            onChange={(e) => setOverrideReason(e.target.value)}
           />
           {setOverride.error ? (
             <Alert variant="destructive">{apiErrorText(setOverride.error)}</Alert>
@@ -457,7 +512,14 @@ export function EmployeesScreen({ canManageOrg }: { canManageOrg: boolean }) {
             <Button type="button" variant="outline" onClick={() => setOverrideFor(null)}>
               {t('common.cancel')}
             </Button>
-            <Button type="submit" disabled={setOverride.isPending}>
+            <Button
+              type="submit"
+              disabled={
+                setOverride.isPending ||
+                !overrideReason.trim() ||
+                (overrideFloor || null) === (overrideFor?.employee.floorOverrideId ?? null)
+              }
+            >
               {setOverride.isPending ? t('common.saving') : t('common.save')}
             </Button>
           </div>
@@ -499,7 +561,7 @@ function RowActions({
         <DropdownMenuGroup>
           {canManageOrg ? (
             <DropdownMenuItem onSelect={() => onOverride(trigger.current)}>
-              <Wallet aria-hidden />
+              <Building2 aria-hidden />
               {t('employees.override')}
             </DropdownMenuItem>
           ) : null}

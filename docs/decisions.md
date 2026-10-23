@@ -159,7 +159,7 @@ A UI/UX pass over every P1 screen, asked for after a review. No business rule ch
 - `adminDayWindow` (BR-21, BR-25): `ON_BEHALF` until the lock, then `EXTRA` until finalization. Finalization (DayClose) is P4, so for now the extra window also ends when day D ends (Q20).
 - `forecastLinesOf` (BR-07): the forecast is active lines with a positive quantity. Lines waiting for reselection (BR-14) are not in it (Q21).
 - `compareWithForecast` (BR-23) gives per-meal forecast, actual and difference. Screens use it to mark a day "Khác dự báo".
-- `sameAsLastWeek` / `applyToWholeWeek` (BR-26) add up quantities by type and put them on the **first** dish of that type on the target day, as BR-26 says for "Same as last week". "Apply to whole week" uses the same rule for consistency. A type missing on the target day is reported, never invented. Nothing is saved until the user presses Save.
+- `sameAsLastWeek` / `applyToWholeWeek` (BR-26) add up quantities by type and put them on the **first** dish of that type on the target day, as BR-26 says for "Same as last week". "Apply to whole week" uses the same rule for consistency. A type missing on the target day is reported, never invented. Nothing is saved until the user presses Save. (Removed on 2026-10-23, see below.)
 - `isLostByLeaver` (BR-36): a leaver loses meals dated on or after `endDate`, unless that day's lock has already passed. Locked days are left to reconciliation (Q23).
 - `DateStringSchema` now rejects impossible dates (`2027-02-30`), so a bad path or query date is a 400, not a 500.
 
@@ -199,3 +199,58 @@ A UI/UX pass over every P1 screen, asked for after a review. No business rule ch
 
 - **`apps/web/tsconfig.json` maps `vitest` to the app's own copy.** pnpm installs two copies of vite/vitest (one per `jiti` peer). `@testing-library/jest-dom`'s vitest types resolved the hoisted copy, so `vitest.config.ts` saw a `defineConfig` without `test` and `pnpm typecheck` failed on a fresh install.
 - **Linux without the embedded PostgreSQL's ICU 60:** run the API tests against a local server with `TEST_DATABASE_URL=postgresql://…/meal_test pnpm --filter @meal/api test`. Turbo does not pass that variable through, so run the API package directly. The e2e suite leaves write-once `ForecastLine` rows behind, so use a fresh database for each run.
+
+## Change requests of 2026-10-23 (between P2 and P3)
+
+A list of fixes and features from the product owner, with the answers to the questions asked back the same day. Like the P1 UI review, this is not a plan phase; it changes the rules below on the product owner's word, and P3 has not started. Migration `20261023000000_change_requests` converts existing rows; nothing is dropped.
+
+### Fixes
+
+- **Sunday was missing from the weekly menu.** `menuWeekDates` listed Sunday only when the `servingDays` setting included it, so it could never be turned on per week like Saturday. Every week now lists Monday to Sunday; `servingDays` still decides which days serve by default. The not-registered day picker also offers Sunday.
+- **A dish could be added twice to the library.** Nothing stopped two dishes with the same name (a double click, or the same name typed again). Now:
+  - Library names are stored trimmed with single spaces (`normalizeLibraryName`) and compared without case (`libraryNameKey`).
+  - Adding, renaming or restoring an entry whose name matches another entry of the same canteen (and, for dishes, the same type) is refused with `409 CONFLICT`. An archived match counts too (`DUPLICATE_ARCHIVED`): the screen tells the admin to restore it instead.
+  - Partial unique indexes on `(canteenId, typeId, lower(name))` for dishes and `(canteenId, lower(name))` for desserts, over non-archived rows, stop two concurrent requests. The migration archives later copies of names that were already duplicated (the oldest stays; menus keep their items).
+  - The forms ignore a second submit while one is pending.
+  - The same name with another type is another dish ("[Chay] Đậu hũ sốt cà" and "[Mặn] Đậu hũ sốt cà").
+
+### Dish library per canteen; dish types as master data
+
+- **`Dish` and `Dessert` belong to one canteen** (product owner's choice over sharing one dish between canteens). The migration puts each entry in the canteen of the first menu that used it, else the factory's first canteen. Lists, the menu builder and the import all take `canteenId`. A menu can only take new or replacement entries from its own canteen's library; entries already on a menu stay.
+- **Dish types are rows** (`DishType`: code, name, colour `#rrggbb`, sort order, optional `minPerDay` / `maxPerDay`, active). The enum `CHAY` / `CHAO` / `MAN` became three rows with the plan's usual mix (Chay 1, Cháo 1, Mặn 2–3); the seed adds "Eat clean" with no bounds. Types are managed on the new "Loại món" tab of `/admin/dishes` (`dishes.manage`, HC admin) and are deactivated, never deleted. An inactive type takes no new dishes and is not checked by the mix note.
+- **BR-12 display:** the text form stays `[Loại] Tên món` (`mealDisplayName` now takes the type name). Screens draw `[Loại]` in the type's colour at weight 600 (`components/dish-name.tsx`): library, menu builder, picker, `/week`, `/today`, the bulk grid.
+- **BR-13:** `checkMenuMix` reads each type's bounds instead of a constant; still a warning only.
+
+### Publishing a week
+
+- **No draft step is needed.** `POST /api/admin/menu/weeks/publish` takes the same body as a save, saves it and publishes. "Lưu nháp" stays as an option. The old `POST /weeks/:id/publish` remains.
+- **New rule:** every serving day needs at least one main dish and at least one dessert (`menuDayGaps` / `menuWeekGaps`). Publishing a week that lacks one fails with `409 MENU_INCOMPLETE` and the list of days; the builder disables "Công bố" and lists the days. Editing a published day must keep one of each. The usual mix by type is still only a warning.
+
+### Replaced dish after closeAt (BR-14)
+
+- When the HC admin replaces a dish, the moved registrations keep the old item in `Registration.replacedFromItemId`.
+- An employee whose meal moved, when the replacement happened at or after the week's closeAt, sees a red line on the new dish ("Đã đổi món: bạn đăng ký …") on `/week` and `/today` (`replacedAfterClose`). Only that employee (product owner's choice): someone who picks the new dish later sees nothing. The existing in-app notice is unchanged.
+
+### Pick-up floor per employee; cost center follows the org tree
+
+- **`Employee.floorOverrideId`:** an HC admin (`org.manage`) sets the floor where one employee picks up their meal, e.g. an IT employee of floor 3 who sits on floor 1. A reason is required and the change is audited (`employee.floorOverride.set`). It stays until removed (no date range). The canteen still comes from the meal unit. An employee floor also stands in for a meal unit that lacks a floor, so that employee can register. Forecast lines keep the floor in effect when they were taken (BR-64).
+- **Cost center follows the org tree.** Each centre or department has its own cost center and every cost of its employees (meals included) adds up there, so `resolveEmployeeCostCenter` is the inherited node mapping, then the DMP value as a default. **The per-employee cost-center override is no longer read**: the endpoint and screen are replaced by the pick-up floor, the column stays for the record (rule 7), and cost centers are no longer "in use" because of it. The mapping import's `EMPLOYEE` rows now set the pick-up floor only.
+- Monthly and yearly cost per cost center is a report (P6); nothing is built for it yet.
+
+### Week number
+
+- `isoWeekOf` (ISO 8601: weeks start on Monday, week 1 holds the year's first Thursday). `WeekNav` shows "Tuần 44" above the range on every week screen.
+
+### Filters by Khối / Trung tâm / Phòng ban
+
+- `GET /api/employees/org-units` (`pin.reset` list scope) and `GET /api/admin/registrations/org-units` (`registration.notRegisteredList` list scope) return the active org nodes in the caller's scope with their DMP level name.
+- `OrgLevelFilter` shows cascading selects (first level below the company, then its children; up to three levels), each labelled with the level name DMP uses ("Khối", "Phòng/Xưởng", "Trung tâm", ...). The deepest choice filters by subtree. On `/admin/employees` and the not-registered list (new `orgUnitId` query, applied on top of the guard's scope, so it never widens it).
+
+### Excel imports
+
+- **Dish library:** template download, then upload with `apply=false` (preview) or `apply=true`. A row is "Món chính" with a dish-type code, or "Tráng miệng". One bad row rejects the file; rows already in the library are skipped, so the same file twice adds nothing. Applied in one transaction with one audit entry (`dishLibrary.imported`).
+- **A unit's week of registrations** (the product owner's meaning of "danh sách đăng ký suất ăn"): the template is the bulk grid as a file (row 1 for people, hidden row 2 with `<date>|<menuItemId>` keys, current quantities filled in), only days still open for on-behalf entry. Upload validates the whole file (`validateRegistrationImport`); applying saves every changed day through the grid's own save, now able to take several days in one transaction (`saveGridDays`), so BR-20, BR-21 and the per-day audit apply unchanged. Same scope as the grid (`registration.onBehalf` on the unit).
+
+### Removed
+
+- "Giống tuần trước" and "Áp dụng cho cả tuần" (BR-26) are gone from `/week`, with their rules and tests.

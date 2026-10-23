@@ -21,6 +21,8 @@ import {
   checkMenuMix,
   isoWeekdayOf,
   type DessertView,
+  type DishTypeLabel,
+  type DishTypeView,
   type DishView,
   type MenuSaveResult,
   type MenuWeekView,
@@ -38,6 +40,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AppDialog } from '@/components/app-dialog';
 import { useConfirm } from '@/components/confirm-dialog';
+import { DishName } from '@/components/dish-name';
 import {
   Command,
   CommandEmpty,
@@ -54,6 +57,7 @@ import { api } from '@/lib/api';
 import { apiErrorText } from '@/lib/errors';
 import {
   createMenuBuilderStore,
+  draftGaps,
   type DraftDay,
   type MenuBuilderStore,
 } from '@/lib/menu-builder-store';
@@ -98,7 +102,13 @@ interface CanteensResponse {
   upcomingWeekStart: string;
 }
 
-/** /admin/menu: canteen picker, dish library, week grid, save draft and publish (BR-08..BR-15). */
+type DishLabel = { type: DishTypeLabel; displayName: string };
+
+/**
+ * /admin/menu: canteen picker, the canteen's dish library, week grid, optional draft save and
+ * publish straight away (BR-08..BR-15). Publishing needs a main dish and a dessert on every
+ * serving day (2026-10-23).
+ */
 export function MenuScreen() {
   const canteens = useQuery({
     queryKey: ['menu-canteens'],
@@ -174,14 +184,36 @@ function WeekEditor({ canteenId, weekStart }: { canteenId: string; weekStart: st
     queryFn: () =>
       api.get<MenuWeekView>(`/admin/menu/weeks?canteenId=${canteenId}&weekStart=${weekStart}`),
   });
+  // Each canteen has its own library (2026-10-23).
   const dishes = useQuery({
-    queryKey: ['/admin/dishes', false],
-    queryFn: () => api.get<{ items: DishView[] }>('/admin/dishes?includeArchived=false'),
+    queryKey: ['/admin/dishes', canteenId, false],
+    queryFn: () =>
+      api.get<{ items: DishView[] }>(`/admin/dishes?canteenId=${canteenId}&includeArchived=false`),
   });
   const desserts = useQuery({
-    queryKey: ['/admin/desserts', false],
-    queryFn: () => api.get<{ items: DessertView[] }>('/admin/desserts?includeArchived=false'),
+    queryKey: ['/admin/desserts', canteenId, false],
+    queryFn: () =>
+      api.get<{ items: DessertView[] }>(
+        `/admin/desserts?canteenId=${canteenId}&includeArchived=false`,
+      ),
   });
+  const dishTypes = useQuery({
+    queryKey: ['/admin/dish-types'],
+    queryFn: () => api.get<{ items: DishTypeView[] }>('/admin/dish-types'),
+  });
+  // BR-13: each active type's usual bounds, for the live mix note.
+  const mixRules = useMemo(
+    () =>
+      (dishTypes.data?.items ?? [])
+        .filter((x) => x.active)
+        .map((x) => ({
+          typeId: x.id,
+          typeName: x.name,
+          minPerDay: x.minPerDay,
+          maxPerDay: x.maxPerDay,
+        })),
+    [dishTypes.data],
+  );
 
   useEffect(() => {
     if (week.data) store.getState().load(week.data);
@@ -189,7 +221,7 @@ function WeekEditor({ canteenId, weekStart }: { canteenId: string; weekStart: st
 
   // Names for every dish shown, including archived ones still on the menu.
   const dishById = useMemo(() => {
-    const map = new Map<string, Pick<DishView, 'type' | 'displayName'>>();
+    const map = new Map<string, DishLabel>();
     for (const d of week.data?.days ?? [])
       for (const i of d.items) map.set(i.dishId, { type: i.type, displayName: i.displayName });
     for (const d of dishes.data?.items ?? []) map.set(d.id, d);
@@ -229,13 +261,21 @@ function WeekEditor({ canteenId, weekStart }: { canteenId: string; weekStart: st
       );
     },
   });
+  // No draft save needed first: the days on screen are saved and published together.
   const publish = useMutation({
-    mutationFn: () => api.post<MenuWeekView>(`/admin/menu/weeks/${view?.id}/publish`),
+    mutationFn: () =>
+      api.post<MenuWeekView>('/admin/menu/weeks/publish', {
+        canteenId,
+        weekStart,
+        days: store.getState().days.filter((d) => !locked.has(d.date)),
+      }),
     onSuccess: (res) => {
       qc.setQueryData(weekKey, res);
+      store.getState().load(res);
       toast.success(t('menu.published'));
     },
   });
+  const gaps = draftGaps(days);
 
   function onDragStart(event: DragStartEvent) {
     setDragging(String(event.active.id));
@@ -277,6 +317,7 @@ function WeekEditor({ canteenId, weekStart }: { canteenId: string; weekStart: st
       description: (
         <>
           <span className="block">{t('menu.publishConfirm')}</span>
+          {dirty ? <span className="mt-2 block">{t('menu.publishWithChanges')}</span> : null}
           <strong className="mt-2 block text-foreground">
             {t('menu.closeAt', { time: formatCloseAt(view.closeAt) })}
           </strong>
@@ -284,7 +325,7 @@ function WeekEditor({ canteenId, weekStart }: { canteenId: string; weekStart: st
       ),
       confirmLabel: t('menu.publish'),
     });
-    if (ok) publish.mutate();
+    if (ok && !publish.isPending) publish.mutate();
   }
 
   if (week.error) return <Alert variant="destructive">{apiErrorText(week.error)}</Alert>;
@@ -333,6 +374,7 @@ function WeekEditor({ canteenId, weekStart }: { canteenId: string; weekStart: st
                 dishById={dishById}
                 dessertName={dessertName}
                 replacementOptions={dishes.data?.items ?? []}
+                mixRules={mixRules}
               />
             ))}
           </div>
@@ -361,7 +403,7 @@ function WeekEditor({ canteenId, weekStart }: { canteenId: string; weekStart: st
                     hint={dropHint(dragging, overId)}
                     label={
                       dragging.startsWith('dish:')
-                        ? (dishById.get(dragging.slice(5))?.displayName ?? '')
+                        ? dishById.get(dragging.slice(5))
                         : (dessertName.get(dragging.slice(8)) ?? '')
                     }
                   />
@@ -389,7 +431,7 @@ function WeekEditor({ canteenId, weekStart }: { canteenId: string; weekStart: st
           ) : null}
           <Button
             variant={published ? 'default' : 'outline'}
-            disabled={save.isPending || (!dirty && view.id !== null)}
+            disabled={save.isPending || publish.isPending || (!dirty && view.id !== null)}
             onClick={() => save.mutate()}
           >
             {save.isPending
@@ -400,17 +442,27 @@ function WeekEditor({ canteenId, weekStart }: { canteenId: string; weekStart: st
           </Button>
           {!published ? (
             <Button
-              disabled={publish.isPending || dirty || view.id === null}
-              aria-describedby={dirty || view.id === null ? 'publish-hint' : undefined}
+              disabled={publish.isPending || save.isPending || gaps.length > 0}
+              aria-describedby={gaps.length > 0 ? 'publish-hint' : undefined}
               onClick={askPublish}
             >
               {publish.isPending ? t('menu.publishing') : t('menu.publish')}
             </Button>
           ) : null}
-          {!published && (dirty || view.id === null) ? (
-            <p id="publish-hint" className="basis-full text-sm text-muted-foreground">
-              {t('menu.publishNeedsSave')}
-            </p>
+          {!published && gaps.length > 0 ? (
+            <div id="publish-hint" className="basis-full text-sm text-muted-foreground">
+              <p>{t('menu.publishBlocked')}</p>
+              <ul className="mt-1 list-disc pl-5">
+                {gaps.map((g) => (
+                  <li key={g.date}>
+                    {t('menu.gap', {
+                      day: `${vi.weekdays[isoWeekdayOf(g.date) as keyof typeof vi.weekdays]} ${formatDate(g.date)}`,
+                      what: g.gaps.map((x) => vi.menu.gaps[x]).join(', '),
+                    })}
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : null}
         </div>
       </div>
@@ -440,7 +492,12 @@ function Library({ dishes, desserts }: { dishes: DishView[]; desserts: DessertVi
         {dishes
           .filter((d) => match(d.displayName))
           .map((d) => (
-            <LibraryEntry key={d.id} dragId={`dish:${d.id}`} label={d.displayName} />
+            <LibraryEntry
+              key={d.id}
+              dragId={`dish:${d.id}`}
+              label={d.displayName}
+              content={<DishName type={d.type} name={d.name} />}
+            />
           ))}
       </ul>
       <p className="text-xs font-semibold uppercase text-muted-foreground">{t('menu.desserts')}</p>
@@ -458,7 +515,15 @@ function Library({ dishes, desserts }: { dishes: DishView[]; desserts: DessertVi
   );
 }
 
-function LibraryEntry({ dragId, label }: { dragId: string; label: string }) {
+function LibraryEntry({
+  dragId,
+  label,
+  content,
+}: {
+  dragId: string;
+  label: string;
+  content?: React.ReactNode;
+}) {
   // The entry stays put (dimmed); the moving copy is the DragOverlay in WeekEditor.
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: dragId });
   return (
@@ -473,17 +538,29 @@ function LibraryEntry({ dragId, label }: { dragId: string; label: string }) {
       aria-label={label}
     >
       <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-      <span className="flex-1">{label}</span>
+      <span className="flex-1">{content ?? label}</span>
     </li>
   );
 }
 
-function DragPreview({ label, hint }: { label: string; hint: string | null }) {
+function DragPreview({
+  label,
+  hint,
+}: {
+  label: DishLabel | string | undefined;
+  hint: string | null;
+}) {
   return (
     <div className="flex w-64 cursor-grabbing flex-col gap-1 rounded-md bg-card px-3 py-2 text-sm shadow-overlay">
       <span className="flex items-center gap-2">
         <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-        <span className="flex-1">{label}</span>
+        <span className="flex-1">
+          {typeof label === 'object' ? (
+            <DishName type={label.type} displayName={label.displayName} />
+          ) : (
+            (label ?? '')
+          )}
+        </span>
       </span>
       {hint ? <span className="pl-6 text-xs font-medium text-primary">{hint}</span> : null}
     </div>
@@ -517,10 +594,16 @@ function DishPicker({
     : '';
 
   // cmdk filters on `value`; ids keep two dishes with the same name apart.
-  const entry = (id: string, label: string, added: boolean, onAdd: () => void) => (
+  const entry = (
+    id: string,
+    label: string,
+    added: boolean,
+    onAdd: () => void,
+    content?: React.ReactNode,
+  ) => (
     <CommandItem key={id} value={`${label} ${id}`} disabled={added} onSelect={onAdd}>
       {added ? <Check className="text-primary" aria-hidden /> : <Plus aria-hidden />}
-      <span className="flex-1">{label}</span>
+      <span className="flex-1">{content ?? label}</span>
       {added ? <span className="text-xs">{t('menu.added')}</span> : null}
     </CommandItem>
   );
@@ -542,7 +625,15 @@ function DishPicker({
               : t('menu.noDishFound')}
           </CommandEmpty>
           <CommandGroup heading={t('menu.mainDishes')}>
-            {dishes.map((d) => entry(d.id, d.displayName, onDay.has(d.id), () => onAddDish(d.id)))}
+            {dishes.map((d) =>
+              entry(
+                d.id,
+                d.displayName,
+                onDay.has(d.id),
+                () => onAddDish(d.id),
+                <DishName type={d.type} name={d.name} />,
+              ),
+            )}
           </CommandGroup>
           <CommandGroup heading={t('menu.desserts')}>
             {desserts.map((d) =>
@@ -566,6 +657,7 @@ function DayColumn({
   dishById,
   dessertName,
   replacementOptions,
+  mixRules,
 }: {
   day: DraftDay;
   store: MenuBuilderStore;
@@ -574,14 +666,17 @@ function DayColumn({
   locked: boolean;
   onAdd: () => void;
   draggingDish: boolean;
-  dishById: Map<string, Pick<DishView, 'type' | 'displayName'>>;
+  dishById: Map<string, DishLabel>;
   dessertName: Map<string, string>;
   replacementOptions: DishView[];
+  mixRules: Parameters<typeof checkMenuMix>[1];
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `day:${day.date}`, disabled: locked });
   const weekday = vi.weekdays[isoWeekdayOf(day.date) as keyof typeof vi.weekdays];
-  const types = day.items.map((i) => dishById.get(i.dishId)?.type).filter((x) => x !== undefined);
-  const mix = day.isServing ? checkMenuMix(types) : null;
+  const types = day.items
+    .map((i) => dishById.get(i.dishId)?.type.id)
+    .filter((x) => x !== undefined);
+  const mix = day.isServing ? checkMenuMix(types, mixRules) : null;
   const actions = store.getState();
   // BR-08 / open-questions Q16: a published serving day cannot be turned off.
   const canToggle = !locked && !(published && wasServing && day.isServing);
@@ -673,7 +768,7 @@ function DayColumn({
             <p className="rounded-md bg-warning/15 px-2 py-1 text-xs" role="status">
               {t('menu.mixWarning', {
                 issues: mix.issues
-                  .map((i) => t('menu.mixIssue', { type: vi.dishTypes[i.type], actual: i.actual }))
+                  .map((i) => t('menu.mixIssue', { type: i.typeName, actual: i.actual }))
                   .join(', '),
               })}
             </p>
@@ -709,7 +804,7 @@ function DayItem({
   locked: boolean;
   draggingDish: boolean;
   store: MenuBuilderStore;
-  dishById: Map<string, Pick<DishView, 'type' | 'displayName'>>;
+  dishById: Map<string, DishLabel>;
   replacementOptions: DishView[];
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `item:${date}:${index}`, disabled: locked });
@@ -727,7 +822,7 @@ function DayItem({
     >
       <div className="flex items-center gap-1">
         <span className="flex-1">
-          {dish?.displayName ?? dishId}
+          {dish ? <DishName type={dish.type} displayName={dish.displayName} /> : dishId}
           {replaceHere ? (
             <span className="ml-2 inline-flex items-center gap-1 text-xs font-medium text-primary">
               <ArrowLeftRight className="h-3 w-3" aria-hidden />
