@@ -181,4 +181,14 @@ describe('PIN fields', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Ẩn mã PIN' }));
     expect(pin).toHaveAttribute('type', 'password');
   });
+
+  // A submit before hydration is a native form submit: with the default GET the PIN would land in
+  // the URL (history, proxy logs, Referer).
+  it('posts natively, so a PIN never goes into the URL', () => {
+    const { container, unmount } = wrap(<LoginForm />);
+    expect(container.querySelector('form')).toHaveAttribute('method', 'post');
+    unmount();
+    const changePin = wrap(<ChangePinForm forced />);
+    expect(changePin.container.querySelector('form')).toHaveAttribute('method', 'post');
+  });
 });

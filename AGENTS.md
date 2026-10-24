@@ -14,6 +14,7 @@ Source of truth: `docs/plan.md` (MVP Plan v1.1, aligned with BRQ-MEAL-001 v1.0).
 10. When the spec is unclear: log it in `docs/open-questions.md`, take the safest option already in the plan, mark a `TODO(BR-xx)`; never invent new rules.
 11. Closing a phase: lint, typecheck and tests pass; seed runs; `docs/decisions.md` is updated; write how to demo each exit criterion (`docs/demo-pN.md`).
 12. Never commit secrets; `.env.example` lists every variable.
+13. Security is part of every change: before closing a phase or change request, go through `docs/security.md` for what you touched (no PIN or secret in a URL, a response, a log or the audit; HTTPS in production; scope checks on ids). Add every new finding to that file with the test that guards it.
 
 ## Commands
 

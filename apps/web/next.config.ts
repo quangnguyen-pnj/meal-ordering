@@ -13,6 +13,22 @@ const config: NextConfig = {
   eslint: { ignoreDuringBuilds: true },
   // The browser always calls the same-origin /api. nginx routes it in production; this rewrite
   // does the same job for `pnpm dev`.
+  // Security review 2026-10-24: no framing of the sign-in page (clickjacking), no MIME sniffing,
+  // and no full URL sent to other sites.
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'same-origin' },
+        ],
+      },
+    ];
+  },
+  poweredByHeader: false,
   async rewrites() {
     return [{ source: '/api/:path*', destination: `${apiInternalUrl}/api/:path*` }];
   },

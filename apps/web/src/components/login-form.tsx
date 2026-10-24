@@ -68,6 +68,8 @@ export function LoginForm() {
       </div>
 
       <form
+        // POST, never the default GET: a submit before hydration must not put the PIN in the URL.
+        method="post"
         noValidate
         onSubmit={form.handleSubmit((values) => login.mutate(values))}
         className="flex flex-col gap-4"

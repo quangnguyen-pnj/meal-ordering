@@ -254,3 +254,13 @@ A list of fixes and features from the product owner, with the answers to the que
 ### Removed
 
 - "Giống tuần trước" and "Áp dụng cho cả tuần" (BR-26) are gone from `/week`, with their rules and tests.
+
+## Security review of 2026-10-24
+
+Reported: the PIN is visible in full in the browser's DevTools. The checklist that came out of the review is `docs/security.md` (AGENTS.md rule 13).
+
+- **Fixed: a submit before hydration put the PIN in the URL.** The sign-in and change-PIN forms had no `method`, so on a slow network the browser sent a native GET to `/login?employeeCode=…&pin=…`, which then sits in browser history, proxy logs and the Referer header. Both forms now use `method="post"`.
+- **Fixed: production could run over plain HTTP.** The api now refuses to start in production without `COOKIE_SECURE=true`, and `docker/nginx.conf` says where TLS must terminate.
+- **Added: no caching of API answers.** `Cache-Control: no-store`, `X-Content-Type-Options: nosniff` and `Referrer-Policy: same-origin` on every `/api` response, and no `X-Powered-By`. The web app sends `X-Frame-Options: DENY` and `frame-ancestors 'none'`.
+- **Checked, no leak found:** every read endpoint, called as each of the four roles, returns no PIN hash, token hash or secret; a rejected sign-in does not echo the PIN; the session token is only in the httpOnly cookie. `apps/api/test/security.e2e-spec.ts` keeps this checked.
+- **Not changed: the PIN in the sign-in request body.** DevTools shows the request before TLS encrypts it, so only someone already at that browser sees it. Hashing the PIN in the browser would not help: the hash becomes the password, and a 6-digit PIN can be brute-forced from any captured hash. HTTPS protects it in transit, and the server stores only an argon2id hash.
