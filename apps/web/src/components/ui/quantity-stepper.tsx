@@ -29,7 +29,7 @@ export function QuantityStepper({
     <div className={cn('flex items-center gap-1', className)}>
       <Button
         type="button"
-        variant="outline"
+        variant="ghost"
         size="icon"
         aria-label={decreaseLabel}
         disabled={disabled || value <= 0}
@@ -50,13 +50,14 @@ export function QuantityStepper({
           onChange(Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0);
         }}
         className={cn(
-          'h-11 w-12 rounded-md border border-input sm:w-14 bg-background text-center text-base tabular-nums md:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
+          'h-10 w-12 rounded-md border border-gray-200 sm:w-14 bg-background text-center text-base tabular-nums md:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
+          '[appearance:textfield] [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none',
           value > 0 && 'border-primary font-semibold',
         )}
       />
       <Button
         type="button"
-        variant="outline"
+        variant="ghost"
         size="icon"
         aria-label={increaseLabel}
         disabled={disabled}
