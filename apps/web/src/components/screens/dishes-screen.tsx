@@ -77,29 +77,34 @@ export function DishesScreen() {
           <CardTitle>{t('dishes.title')}</CardTitle>
           <CardDescription>{t('dishes.intro')}</CardDescription>
         </div>
-        {canteens.data && canteens.data.items.length > 0 && tab !== 'types' ? (
-          <div className="flex w-full flex-col gap-2 sm:w-60">
-            <Label htmlFor="dish-canteen">{t('dishes.canteen')}</Label>
-            <ResponsiveSelect
-              id="dish-canteen"
-              value={canteenId ?? ''}
-              onValueChange={setCanteenId}
-              options={canteens.data.items.map((c) => ({ value: c.id, label: c.name }))}
-            />
-          </div>
-        ) : null}
       </CardHeader>
+
       <CardContent>
         {canteens.error ? (
           <Alert variant="destructive">{apiErrorText(canteens.error)}</Alert>
         ) : null}
+
         {canteens.data?.items.length === 0 ? <Alert>{t('menu.noCanteen')}</Alert> : null}
+
         <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
           <TabsList aria-label={t('dishes.title')}>
             <TabsTrigger value="main">{t('dishes.tabs.main')}</TabsTrigger>
             <TabsTrigger value="desserts">{t('dishes.tabs.desserts')}</TabsTrigger>
             <TabsTrigger value="types">{t('dishes.tabs.types')}</TabsTrigger>
           </TabsList>
+
+          {canteens.data && canteens.data.items.length > 0 && tab !== 'types' ? (
+            <div className="flex w-full flex-col gap-2 sm:w-60 mt-5">
+              <Label htmlFor="dish-canteen">{t('dishes.canteen')}</Label>
+              <ResponsiveSelect
+                id="dish-canteen"
+                value={canteenId ?? ''}
+                onValueChange={setCanteenId}
+                options={canteens.data.items.map((c) => ({ value: c.id, label: c.name }))}
+              />
+            </div>
+          ) : null}
+
           <TabsContent value="main">
             {canteen ? <MainDishes key={canteen.id} canteen={canteen} /> : null}
           </TabsContent>
@@ -268,8 +273,8 @@ function MainDishes({ canteen }: { canteen: { id: string; name: string } }) {
   const editingType = (types.data?.items ?? []).find((x) => x.id === editing?.typeId);
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-end gap-4">
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-end gap-3">
         <NameSearch id="dish-q" value={q} onChange={setQ} />
         <div className="flex w-full flex-col gap-2 sm:w-48">
           <Label htmlFor="dish-filter">{t('dishes.filterType')}</Label>
@@ -308,7 +313,7 @@ function MainDishes({ canteen }: { canteen: { id: string; name: string } }) {
       >
         {editing ? (
           <form
-            className="flex flex-col gap-5"
+            className="flex flex-col gap-4"
             onSubmit={(e) => {
               e.preventDefault();
               // One request per click, even with a double click or Enter pressed twice.
@@ -454,8 +459,8 @@ function Desserts({ canteen }: { canteen: { id: string; name: string } }) {
   const { pageItems, pagination } = usePagination(items, `${q}|${showArchived}`);
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-end gap-4">
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-end gap-3">
         <NameSearch id="dessert-q" value={q} onChange={setQ} />
         <label className="flex min-h-11 items-center gap-2 text-sm">
           <Checkbox checked={showArchived} onCheckedChange={(v) => setShowArchived(v === true)} />
@@ -480,7 +485,7 @@ function Desserts({ canteen }: { canteen: { id: string; name: string } }) {
       >
         {editing ? (
           <form
-            className="flex flex-col gap-5"
+            className="flex flex-col gap-4"
             onSubmit={(e) => {
               e.preventDefault();
               if (!save.isPending) save.mutate(editing);
@@ -617,8 +622,8 @@ function DishTypes() {
     v.trim() !== '' && (!Number.isInteger(Number(v)) || Number(v) < 0 || Number(v) > 20);
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-center gap-4">
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-3">
         <p className="max-w-prose text-sm text-muted-foreground">{t('dishes.types.intro')}</p>
         <Button
           className="ml-auto"
@@ -647,7 +652,7 @@ function DishTypes() {
       >
         {editing ? (
           <form
-            className="flex flex-col gap-5"
+            className="flex flex-col gap-4"
             onSubmit={(e) => {
               e.preventDefault();
               if (!save.isPending) save.mutate(editing);
@@ -695,7 +700,7 @@ function DishTypes() {
                 <Input
                   aria-label={t('dishes.types.color')}
                   type="color"
-                  className="h-10 w-14 p-1"
+                  className="h-10 w-14 py-0.5 px-2"
                   value={validColor ? editing.color : '#000000'}
                   onChange={(e) => setEditing({ ...editing, color: e.target.value })}
                 />
