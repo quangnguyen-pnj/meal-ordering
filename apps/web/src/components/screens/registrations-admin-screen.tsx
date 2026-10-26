@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Pagination } from '@/components/ui/pagination';
 import { LoadingRows } from '@/components/ui/skeleton';
 import {
   Table,
@@ -36,6 +37,8 @@ import {
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { WeekNav } from '@/components/week-nav';
+import { useDebounced } from '@/hooks/use-debounced';
+import { usePagination } from '@/hooks/use-pagination';
 import { ApiError, api } from '@/lib/api';
 import { apiErrorText } from '@/lib/errors';
 import { columnTotals, gridChanges, gridValues, type GridValues } from '@/lib/grid-draft';
@@ -109,56 +112,62 @@ function ProgressTab({ weekStart }: { weekStart: string }) {
     queryFn: () =>
       api.get<RegistrationProgressView>(`/admin/registrations/progress?weekStart=${weekStart}`),
   });
+  const { pageItems, pagination } = usePagination(query.data?.units ?? [], weekStart);
   if (query.error) return <Alert variant="destructive">{apiErrorText(query.error)}</Alert>;
   if (!query.data) return <LoadingRows />;
   if (query.data.units.length === 0) {
     return <p className="text-sm text-muted-foreground">{t('registrations.noUnits')}</p>;
   }
   return (
-    <Table className="min-w-[36rem]">
-      <TableHeader>
-        <TableRow>
-          <TableHead>{t('registrations.mealUnit')}</TableHead>
-          <TableHead className="text-right">{t('registrations.headcount')}</TableHead>
-          <TableHead className="text-right">{t('registrations.registered')}</TableHead>
-          <TableHead className="text-right">{t('registrations.notRegistered')}</TableHead>
-          <TableHead className="text-right">{t('registrations.meals')}</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {query.data.units.map((u) => {
-          const pct = u.headcount > 0 ? Math.round((u.registered / u.headcount) * 100) : 0;
-          return (
-            <TableRow key={u.mealUnitId}>
-              <TableCell>
-                <p className="font-medium">{u.name}</p>
-                <p className="text-xs text-muted-foreground">{u.pathName}</p>
-                {!u.published ? (
-                  <Badge variant="warning" className="mt-1">
-                    {t('registrations.notPublished')}
-                  </Badge>
-                ) : null}
-              </TableCell>
-              <TableCell className="text-right tabular-nums">{u.headcount}</TableCell>
-              <TableCell className="text-right tabular-nums">
-                {u.registered}{' '}
-                <span className="text-xs text-muted-foreground">
-                  {t('registrations.progressPct', { pct })}
-                </span>
-              </TableCell>
-              <TableCell className="text-right tabular-nums">{u.notRegistered}</TableCell>
-              <TableCell className="text-right tabular-nums">{u.meals}</TableCell>
-            </TableRow>
-          );
-        })}
-      </TableBody>
-    </Table>
+    <div className="flex flex-col gap-3">
+      <Table className="min-w-[36rem]">
+        <TableHeader>
+          <TableRow>
+            <TableHead>{t('registrations.mealUnit')}</TableHead>
+            <TableHead className="text-right">{t('registrations.headcount')}</TableHead>
+            <TableHead className="text-right">{t('registrations.registered')}</TableHead>
+            <TableHead className="text-right">{t('registrations.notRegistered')}</TableHead>
+            <TableHead className="text-right">{t('registrations.meals')}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {pageItems.map((u) => {
+            const pct = u.headcount > 0 ? Math.round((u.registered / u.headcount) * 100) : 0;
+            return (
+              <TableRow key={u.mealUnitId}>
+                <TableCell>
+                  <p className="font-medium">{u.name}</p>
+                  <p className="text-xs text-muted-foreground">{u.pathName}</p>
+                  {!u.published ? (
+                    <Badge variant="warning" className="mt-1">
+                      {t('registrations.notPublished')}
+                    </Badge>
+                  ) : null}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">{u.headcount}</TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {u.registered}{' '}
+                  <span className="text-xs text-muted-foreground">
+                    {t('registrations.progressPct', { pct })}
+                  </span>
+                </TableCell>
+                <TableCell className="text-right tabular-nums">{u.notRegistered}</TableCell>
+                <TableCell className="text-right tabular-nums">{u.meals}</TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+      <Pagination {...pagination} />
+    </div>
   );
 }
 
 function NotRegisteredTab({ weekStart }: { weekStart: string }) {
   const [date, setDate] = useState('');
   const [orgUnitId, setOrgUnitId] = useState('');
+  const [q, setQ] = useState('');
+  const term = useDebounced(q.trim().toLocaleLowerCase('vi'), 200);
   const query = useQuery({
     queryKey: ['/admin/registrations/not-registered', weekStart, date, orgUnitId],
     queryFn: () => {
@@ -168,6 +177,17 @@ function NotRegisteredTab({ weekStart }: { weekStart: string }) {
       return api.get<NotRegisteredView>(`/admin/registrations/not-registered?${q}`);
     },
   });
+  // Searched here: the API returns the whole list for the week, day and org filter.
+  const matches = (query.data?.items ?? []).filter(
+    (e) =>
+      !term ||
+      e.employeeCode.toLocaleLowerCase('vi').includes(term) ||
+      e.name.toLocaleLowerCase('vi').includes(term),
+  );
+  const { pageItems, pagination } = usePagination(
+    matches,
+    `${weekStart}|${date}|${orgUnitId}|${term}`,
+  );
   // Khối / Trung tâm / Phòng ban filter, within the caller's scope.
   const orgUnits = useQuery({
     queryKey: ['/admin/registrations/org-units'],
@@ -183,6 +203,10 @@ function NotRegisteredTab({ weekStart }: { weekStart: string }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-end gap-3">
+        <div className="flex w-full flex-col gap-2 sm:w-56">
+          <Label htmlFor="nr-q">{t('common.search')}</Label>
+          <Input id="nr-q" type="search" value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
         <div className="flex w-full flex-col gap-2 sm:w-56">
           <Label htmlFor="nr-day">{t('history.date')}</Label>
           <ResponsiveSelect id="nr-day" value={date} onValueChange={setDate} options={options} />
@@ -202,26 +226,45 @@ function NotRegisteredTab({ weekStart }: { weekStart: string }) {
       {query.data && query.data.total > 0 ? (
         <>
           <p className="text-sm">{t('registrations.listTotal', { count: query.data.total })}</p>
-          <Table className="min-w-[36rem]">
+          <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>{t('common.code')}</TableHead>
                 <TableHead>{t('common.name')}</TableHead>
-                <TableHead>{t('registrations.unit')}</TableHead>
-                <TableHead>{t('registrations.mealUnit')}</TableHead>
+                <TableHead className="hidden md:table-cell">{t('registrations.unit')}</TableHead>
+                <TableHead className="hidden sm:table-cell">
+                  {t('registrations.mealUnit')}
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {query.data.items.map((e) => (
+              {pageItems.map((e) => (
                 <TableRow key={e.employeeCode}>
                   <TableCell className="tabular-nums">{e.employeeCode}</TableCell>
-                  <TableCell className="font-medium">{e.name}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{e.orgPath}</TableCell>
-                  <TableCell>{e.mealUnitName}</TableCell>
+                  <TableCell>
+                    <p className="font-medium">{e.name}</p>
+                    {/* Narrow screens: the unit columns fold under the name. */}
+                    <p className="text-xs text-muted-foreground md:hidden">
+                      <span className="sm:hidden">{e.mealUnitName} · </span>
+                      {e.orgPath}
+                    </p>
+                  </TableCell>
+                  <TableCell className="hidden text-sm text-muted-foreground md:table-cell">
+                    {e.orgPath}
+                  </TableCell>
+                  <TableCell className="hidden sm:table-cell">{e.mealUnitName}</TableCell>
                 </TableRow>
               ))}
+              {matches.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-muted-foreground">
+                    {t('registrations.noMatch')}
+                  </TableCell>
+                </TableRow>
+              ) : null}
             </TableBody>
           </Table>
+          <Pagination {...pagination} />
         </>
       ) : null}
     </div>

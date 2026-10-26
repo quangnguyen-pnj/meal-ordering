@@ -21,6 +21,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { AppDialog } from '@/components/app-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Pagination } from '@/components/ui/pagination';
 import { LoadingRows } from '@/components/ui/skeleton';
 import {
   Table,
@@ -31,6 +32,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { usePagination } from '@/hooks/use-pagination';
 import { api, ApiError } from '@/lib/api';
 import { apiErrorText } from '@/lib/errors';
 import { t, vi } from '@/messages';
@@ -199,10 +201,32 @@ function LibraryImport({ canteen }: { canteen: { id: string; name: string } }) {
   );
 }
 
+/** A name search box over the library, filtered here: the list is already loaded whole. */
+function NameSearch({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex w-full flex-col gap-2 sm:w-56">
+      <Label htmlFor={id}>{t('dishes.searchName')}</Label>
+      <Input id={id} type="search" value={value} onChange={(e) => onChange(e.target.value)} />
+    </div>
+  );
+}
+
+const nameMatches = (name: string, q: string) =>
+  name.toLocaleLowerCase('vi').includes(q.trim().toLocaleLowerCase('vi'));
+
 function MainDishes({ canteen }: { canteen: { id: string; name: string } }) {
   const qc = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
   const [filter, setFilter] = useState('');
+  const [q, setQ] = useState('');
   const [editing, setEditing] = useState<Editing | null>(null);
   const list = useLibrary<DishView>('/admin/dishes', canteen.id, showArchived);
   const types = useDishTypes();
@@ -236,14 +260,18 @@ function MainDishes({ canteen }: { canteen: { id: string; name: string } }) {
     },
   });
 
-  const items = (list.data?.items ?? []).filter((d) => !filter || d.typeId === filter);
+  const items = (list.data?.items ?? []).filter(
+    (d) => (!filter || d.typeId === filter) && nameMatches(d.name, q),
+  );
+  const { pageItems, pagination } = usePagination(items, `${filter}|${q}|${showArchived}`);
   const error = archive.error ?? list.error ?? types.error;
   const editingType = (types.data?.items ?? []).find((x) => x.id === editing?.typeId);
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end gap-3">
-        <div className="flex w-48 flex-col gap-2">
+        <NameSearch id="dish-q" value={q} onChange={setQ} />
+        <div className="flex w-full flex-col gap-2 sm:w-48">
           <Label htmlFor="dish-filter">{t('dishes.filterType')}</Label>
           <ResponsiveSelect
             id="dish-filter"
@@ -344,7 +372,7 @@ function MainDishes({ canteen }: { canteen: { id: string; name: string } }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {items.map((d) => (
+          {pageItems.map((d) => (
             <TableRow key={d.id} className={d.archivedAt ? 'text-muted-foreground' : undefined}>
               <TableCell>
                 <DishName type={d.type} name={d.name} />{' '}
@@ -385,6 +413,7 @@ function MainDishes({ canteen }: { canteen: { id: string; name: string } }) {
           ) : null}
         </TableBody>
       </Table>
+      <Pagination {...pagination} />
     </div>
   );
 }
@@ -392,6 +421,7 @@ function MainDishes({ canteen }: { canteen: { id: string; name: string } }) {
 function Desserts({ canteen }: { canteen: { id: string; name: string } }) {
   const qc = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
+  const [q, setQ] = useState('');
   const [editing, setEditing] = useState<{ id: string | null; name: string } | null>(null);
   const list = useLibrary<DessertView>('/admin/desserts', canteen.id, showArchived);
 
@@ -420,11 +450,13 @@ function Desserts({ canteen }: { canteen: { id: string; name: string } }) {
     },
   });
   const error = archive.error ?? list.error;
-  const items = list.data?.items ?? [];
+  const items = (list.data?.items ?? []).filter((d) => nameMatches(d.name, q));
+  const { pageItems, pagination } = usePagination(items, `${q}|${showArchived}`);
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-end gap-3">
+        <NameSearch id="dessert-q" value={q} onChange={setQ} />
         <label className="flex min-h-11 items-center gap-2 text-sm">
           <Checkbox checked={showArchived} onCheckedChange={(v) => setShowArchived(v === true)} />
           {t('dishes.showArchived')}
@@ -483,7 +515,7 @@ function Desserts({ canteen }: { canteen: { id: string; name: string } }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {items.map((d) => (
+          {pageItems.map((d) => (
             <TableRow key={d.id} className={d.archivedAt ? 'text-muted-foreground' : undefined}>
               <TableCell>
                 {d.name}{' '}
@@ -522,6 +554,7 @@ function Desserts({ canteen }: { canteen: { id: string; name: string } }) {
           ) : null}
         </TableBody>
       </Table>
+      <Pagination {...pagination} />
     </div>
   );
 }

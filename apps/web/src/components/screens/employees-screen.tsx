@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PAGE_SIZE as PAGE, Pagination } from '@/components/ui/pagination';
 import { LoadingRows } from '@/components/ui/skeleton';
 import {
   Table,
@@ -52,8 +53,6 @@ import { api } from '@/lib/api';
 import { apiErrorText } from '@/lib/errors';
 import { cn, formatRange } from '@/lib/utils';
 import { t, vi } from '@/messages';
-
-const PAGE = 50;
 
 interface Filters {
   q: string;
@@ -420,24 +419,14 @@ export function EmployeesScreen({ canManageOrg }: { canManageOrg: boolean }) {
           </>
         )}
 
-        <div className="flex items-center justify-end gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={offset === 0}
-            onClick={() => setOffset(Math.max(0, offset - PAGE))}
-          >
-            {t('common.previous')}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={offset + PAGE >= total}
-            onClick={() => setOffset(offset + PAGE)}
-          >
-            {t('common.next')}
-          </Button>
-        </div>
+        <Pagination
+          page={Math.floor(offset / PAGE) + 1}
+          pageCount={Math.ceil(total / PAGE)}
+          offset={offset}
+          count={items.length}
+          total={total}
+          onPageChange={(page) => setOffset((page - 1) * PAGE)}
+        />
       </CardContent>
 
       {confirmElement}

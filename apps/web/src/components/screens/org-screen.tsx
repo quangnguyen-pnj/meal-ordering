@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Pagination } from '@/components/ui/pagination';
 import { LoadingRows } from '@/components/ui/skeleton';
 import {
   Table,
@@ -30,6 +31,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { usePagination } from '@/hooks/use-pagination';
 import { ApiError, api } from '@/lib/api';
 import { apiErrorText } from '@/lib/errors';
 import {
@@ -363,6 +365,7 @@ function MealUnitList({
         (n) => n.name.toLowerCase().includes(filter) || n.dmpCode.toLowerCase().includes(filter),
       )
     : all;
+  const { pageItems, pagination } = usePagination(units, filter);
   const nameOr = (id: string | null, name: (id: string | null) => string) =>
     id === null ? t('common.none') : name(id);
 
@@ -383,7 +386,7 @@ function MealUnitList({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {units.map((n) => (
+          {pageItems.map((n) => (
             <TableRow key={n.id} className={cn(selectedId === n.id && 'bg-accent')}>
               <TableCell>
                 <button
@@ -418,6 +421,7 @@ function MealUnitList({
           ) : null}
         </TableBody>
       </Table>
+      <Pagination {...pagination} />
     </div>
   );
 }
@@ -733,9 +737,10 @@ function EmployeeList({ path, showReason = false }: { path: string; showReason?:
     queryKey: [path],
     queryFn: () => api.get<{ items: EmployeeMappingView[] }>(path),
   });
+  const items = list.data?.items ?? [];
+  const { pageItems, pagination } = usePagination(items);
   if (list.error) return <Alert variant="destructive">{apiErrorText(list.error)}</Alert>;
   if (list.isLoading) return <LoadingRows rows={6} />;
-  const items = list.data?.items ?? [];
   const reason = (e: EmployeeMappingView) =>
     e.mealStatus === 'NO_MEAL_UNIT'
       ? t('org.reasonNoMealUnit')
@@ -759,7 +764,7 @@ function EmployeeList({ path, showReason = false }: { path: string; showReason?:
           </TableRow>
         </TableHeader>
         <TableBody>
-          {items.map((e) => (
+          {pageItems.map((e) => (
             <TableRow key={e.employeeCode}>
               <TableCell className="font-mono">{e.employeeCode}</TableCell>
               <TableCell>{e.name}</TableCell>
@@ -776,6 +781,7 @@ function EmployeeList({ path, showReason = false }: { path: string; showReason?:
           ) : null}
         </TableBody>
       </Table>
+      <Pagination {...pagination} />
     </div>
   );
 }
@@ -786,6 +792,9 @@ function ImportExportTab() {
   const qc = useQueryClient();
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<MappingImportView | null>(null);
+  const resultKey = result ? `${result.id}:${result.status}` : '';
+  const errorPage = usePagination(result?.errors ?? [], resultKey);
+  const changePage = usePagination(result?.changes ?? [], resultKey);
 
   const exportFile = useMutation({
     mutationFn: () => api.download('/admin/org/mapping/export', 'mapping-to-chuc.xlsx'),
@@ -876,8 +885,8 @@ function ImportExportTab() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {result.errors.map((e, i) => (
-                    <TableRow key={i}>
+                  {errorPage.pageItems.map((e, i) => (
+                    <TableRow key={errorPage.pagination.offset + i}>
                       <TableCell>{e.rowNumber}</TableCell>
                       <TableCell>{vi.org.fields[e.field]}</TableCell>
                       <TableCell className="font-mono">{e.value || t('common.none')}</TableCell>
@@ -886,6 +895,7 @@ function ImportExportTab() {
                   ))}
                 </TableBody>
               </Table>
+              <Pagination {...errorPage.pagination} />
             </>
           ) : (
             <>
@@ -897,39 +907,42 @@ function ImportExportTab() {
                     : t('org.preview', { count: result.changes.length, rows: result.rowCount })}
               </Alert>
               {result.changes.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t('org.row')}</TableHead>
-                      <TableHead>{t('common.code')}</TableHead>
-                      <TableHead>{t('common.name')}</TableHead>
-                      <TableHead>{t('org.floor')}</TableHead>
-                      <TableHead>{t('org.canteen')}</TableHead>
-                      <TableHead>{t('org.costCenter')}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {result.changes.map((c) => (
-                      <TableRow key={c.rowNumber}>
-                        <TableCell>{c.rowNumber}</TableCell>
-                        <TableCell className="font-mono">{c.code}</TableCell>
-                        <TableCell>{c.name}</TableCell>
-                        {(['floorCode', 'canteenCode', 'costCenterCode'] as const).map((k) => (
-                          <TableCell
-                            key={k}
-                            className={
-                              c.before[k] !== c.after[k] ? 'font-medium' : 'text-muted-foreground'
-                            }
-                          >
-                            {c.before[k] === c.after[k]
-                              ? codeOrDash(c.after[k])
-                              : `${codeOrDash(c.before[k])} → ${codeOrDash(c.after[k])}`}
-                          </TableCell>
-                        ))}
+                <>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{t('org.row')}</TableHead>
+                        <TableHead>{t('common.code')}</TableHead>
+                        <TableHead>{t('common.name')}</TableHead>
+                        <TableHead>{t('org.floor')}</TableHead>
+                        <TableHead>{t('org.canteen')}</TableHead>
+                        <TableHead>{t('org.costCenter')}</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {changePage.pageItems.map((c) => (
+                        <TableRow key={c.rowNumber}>
+                          <TableCell>{c.rowNumber}</TableCell>
+                          <TableCell className="font-mono">{c.code}</TableCell>
+                          <TableCell>{c.name}</TableCell>
+                          {(['floorCode', 'canteenCode', 'costCenterCode'] as const).map((k) => (
+                            <TableCell
+                              key={k}
+                              className={
+                                c.before[k] !== c.after[k] ? 'font-medium' : 'text-muted-foreground'
+                              }
+                            >
+                              {c.before[k] === c.after[k]
+                                ? codeOrDash(c.after[k])
+                                : `${codeOrDash(c.before[k])} → ${codeOrDash(c.after[k])}`}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  <Pagination {...changePage.pagination} />
+                </>
               ) : null}
               {result.status === 'PREVIEW' && result.changes.length > 0 ? (
                 <div>

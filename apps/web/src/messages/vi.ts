@@ -19,6 +19,11 @@ export const vi = {
     factory: 'PNJP Gò Vấp',
     tagline: 'Đăng ký suất ăn trưa',
   },
+  pagination: {
+    label: 'Phân trang',
+    page: 'Trang {page}',
+    pageOf: 'Trang {page}/{pageCount}',
+  },
   common: {
     loading: 'Đang tải…',
     signOut: 'Đăng xuất',
@@ -133,6 +138,7 @@ export const vi = {
       'Mỗi nhà ăn có thư viện món chính và món tráng miệng riêng, dùng lại qua các tuần. Món không dùng nữa được lưu trữ, không xóa.',
     canteen: 'Nhà ăn',
     tabs: { main: 'Món chính', desserts: 'Tráng miệng', types: 'Loại món' },
+    searchName: 'Tìm theo tên món',
     type: 'Loại',
     duplicate: 'Món này đã có trong thư viện của nhà ăn.',
     duplicateArchived:
@@ -352,6 +358,7 @@ export const vi = {
     allWeek: 'Cả tuần',
     noOne: 'Mọi người trong phạm vi đã đăng ký.',
     listTotal: '{count} người chưa có suất nào.',
+    noMatch: 'Không có ai khớp với từ khóa tìm.',
     noUnits: 'Không có đơn vị nào trong phạm vi của bạn.',
     import: {
       open: 'Nhập từ Excel',
