@@ -126,7 +126,7 @@ export function WeekRegistrationScreen() {
               </p>
             </Alert>
 
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
               {days.map((day) => (
                 <section
                   key={day.date}

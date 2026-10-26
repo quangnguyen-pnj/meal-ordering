@@ -5,6 +5,12 @@ const config: Config = {
   content: ['./src/**/*.{ts,tsx}'],
   theme: {
     extend: {
+      // One step larger than Tailwind's defaults (12/14px): small text stays readable on a phone
+      // in the canteen and for older staff. Body copy is text-sm (15px).
+      fontSize: {
+        xs: ['0.8125rem', { lineHeight: '1.125rem' }],
+        sm: ['0.9375rem', { lineHeight: '1.375rem' }],
+      },
       colors: {
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
@@ -23,6 +29,7 @@ const config: Config = {
           foreground: 'hsl(var(--destructive-foreground))',
         },
         warning: { DEFAULT: 'hsl(var(--warning))', foreground: 'hsl(var(--warning-foreground))' },
+        success: { DEFAULT: 'hsl(var(--success))', foreground: 'hsl(var(--success-foreground))' },
         card: { DEFAULT: 'hsl(var(--card))', foreground: 'hsl(var(--card-foreground))' },
         canvas: 'hsl(var(--canvas))',
         popover: {

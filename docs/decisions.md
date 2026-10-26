@@ -272,3 +272,16 @@ Reported: the PIN is visible in full in the browser's DevTools. The checklist th
 - **Nhân viên keeps server-side paging** (`limit`/`offset`), now 25 instead of 50 per page and with the same component.
 - **Not paged, on purpose:** the bulk entry grid (Enter/Tab move through every row and a day saves as one batch), the print sheet, the org tree, the menu builder's library (scrolls inside its panel, with search) and the Excel import dialog (its error list scrolls).
 - **Added with it:** a name/code search on Chưa đăng ký and a name search on the dish library (both filter the loaded list), and the team search now waits 300 ms before calling the API instead of calling it on every key. On phones Chưa đăng ký folds the unit columns under the name, so the table no longer scrolls sideways.
+
+## Type, colour and phone layouts (UI review, 2026-10-26)
+
+- **Font: Be Vietnam Pro** (400–700), drawn for Vietnamese diacritics. It is self-hosted from `@fontsource/be-vietnam-pro` and imported in the root layout, so the intranet-only app never calls Google Fonts. System fonts stay as the fallback.
+- **Type scale one step up:** `text-xs` is 13px and `text-sm` is 15px (Tailwind's defaults are 12px and 14px), set once in `tailwind.config.ts` rather than per screen. The two hand-sized labels in the menu (10–11px) now use the scale.
+- **Warm palette:** text is a warm near-black (`24 14% 13%`) instead of navy, to sit with the orange primary and the warm canvas. Secondary text is a warm grey (`25 8% 40%`), about 5.9:1 on white. The old blue-grey (`210 13% 62%`) was about 2.6:1, below WCAG AA.
+- **Green for "yes" states:** the `success` badge (eating, published, valid) uses a new `--success` green. It used the orange primary before, which read like a warning next to the red badges.
+- **Tabs stay on one row and scroll sideways** on narrow screens, instead of wrapping into an uneven second row. A focused tab scrolls itself fully into view.
+- **Nhân viên on phones:**
+  - Only the search box shows. The other filters open in a bottom sheet from a "Bộ lọc" button, which shows how many filters are on; the sheet has "Xóa bộ lọc" and "Xem n người".
+  - Each card's ⋯ menu sits next to the name, and the label column has a fixed width.
+  - On desktop the actions column has no visible header, so the table fits a 1366px screen.
+- **Đăng ký tuần** shows 3 day columns only from 1536px (`2xl`). Between 768 and 1535px it shows 2, so dish names do not wrap beside the steppers.

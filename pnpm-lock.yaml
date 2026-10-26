@@ -120,6 +120,9 @@ importers:
       '@dnd-kit/core':
         specifier: ^6.3.1
         version: 6.3.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@fontsource/be-vietnam-pro':
+        specifier: 5.2.5
+        version: 5.2.5
       '@hookform/resolvers':
         specifier: ^3.10.0
         version: 3.10.0(react-hook-form@7.90.0(@types/react@19.3.0)(react@19.3.1))
@@ -760,6 +763,9 @@ packages:
 
   '@floating-ui/utils@0.2.12':
     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
+
+  '@fontsource/be-vietnam-pro@5.2.5':
+    resolution: {integrity: sha512-spcbpapmKlfKjNz2jW7y2Vkb3SE0N61b2duYm/lTZZk7bg9btJ3ZVFcyZrgHWUYf5bESspmPy2XEdDa8J+cs4Q==}
 
   '@hookform/resolvers@3.10.0':
     resolution: {integrity: sha512-79Dv+3mDF7i+2ajj7SkypSKHhl1cbln1OGavqrsF7p6mbUv11xpqpacPsGDCTRvCSjEEIez2ef1NveSVL3b0Ag==}
@@ -5401,6 +5407,8 @@ snapshots:
       react-dom: 19.3.1(react@19.3.1)
 
   '@floating-ui/utils@0.2.12': {}
+
+  '@fontsource/be-vietnam-pro@5.2.5': {}
 
   '@hookform/resolvers@3.10.0(react-hook-form@7.90.0(@types/react@19.3.0)(react@19.3.1))':
     dependencies:

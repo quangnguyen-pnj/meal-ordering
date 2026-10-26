@@ -29,7 +29,6 @@ export const vi = {
     signOut: 'Đăng xuất',
     back: 'Quay lại',
     menu: 'Mở menu',
-    closeMenu: 'Đóng menu',
     requiredField: 'Trường này là bắt buộc',
     save: 'Lưu',
     saving: 'Đang lưu…',
@@ -588,6 +587,9 @@ export const vi = {
     title: 'Nhân viên',
     intro: 'Tìm nhân viên trong phạm vi bạn quản lý, xem đầu mối nhận cơm và cấp lại mã PIN.',
     filters: 'Bộ lọc',
+    filtersHint: 'Danh sách cập nhật ngay khi bạn chọn.',
+    clearFilters: 'Xóa bộ lọc',
+    showResults: 'Xem {count} người',
     orgUnit: 'Đơn vị (gồm cấp dưới)',
     mealStatus: 'Tình trạng suất ăn',
     mealStatuses: {
