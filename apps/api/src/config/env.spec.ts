@@ -45,4 +45,19 @@ describe('loadEnv', () => {
       /ENTRA_MODE=mock is not allowed in production[\s\S]*Replace the example SESSION_SECRET/,
     );
   });
+
+  it('requires the Secure cookie flag, so HTTPS, in production', () => {
+    const prod = {
+      ...base,
+      NODE_ENV: 'production',
+      ENTRA_MODE: 'oidc',
+      ENTRA_TENANT_ID: 't',
+      ENTRA_CLIENT_ID: 'c',
+      ENTRA_CLIENT_SECRET: 's',
+      ENTRA_REDIRECT_URI: 'https://meal.pnjp.test/api/auth/entra/callback',
+      SESSION_SECRET: 'a-real-secret-a-real-secret-a-real-secret',
+    };
+    expect(() => loadEnv(prod)).toThrow(/COOKIE_SECURE=true is required in production/);
+    expect(loadEnv({ ...prod, COOKIE_SECURE: 'true' }).COOKIE_SECURE).toBe(true);
+  });
 });

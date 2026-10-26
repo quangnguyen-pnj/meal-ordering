@@ -70,6 +70,9 @@ const EnvSchema = z
       if (env.SESSION_SECRET.startsWith('change-me')) {
         fail('SESSION_SECRET', 'Replace the example SESSION_SECRET in production');
       }
+      // The PIN and the session cookie travel in clear without HTTPS (security review 2026-10-24).
+      if (!env.COOKIE_SECURE)
+        fail('COOKIE_SECURE', 'COOKIE_SECURE=true is required in production (serve over HTTPS)');
     }
   });
 

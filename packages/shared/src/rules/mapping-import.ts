@@ -1,6 +1,6 @@
 /**
  * BR-64: mapping import from the Excel template. One row maps an org node (floor, canteen, cost
- * center) or an employee (cost-center override). Every row is validated; one invalid row rejects
+ * center) or an employee (pick-up floor, since 2026-10-23; cost center follows the org tree). Every row is validated; one invalid row rejects
  * the whole file.
  *
  * A row states the complete mapping of its target: a blank cell means "no own value", so the
@@ -38,7 +38,7 @@ export const MAPPING_ROW_ERROR_CODES = [
   'FLOOR_UNKNOWN',
   'CANTEEN_UNKNOWN',
   'COST_CENTER_UNKNOWN',
-  'EMPLOYEE_FLOOR_OR_CANTEEN',
+  'EMPLOYEE_CANTEEN_OR_COST_CENTER',
   'DUPLICATE_TARGET',
 ] as const;
 export type MappingRowErrorCode = (typeof MAPPING_ROW_ERROR_CODES)[number];
@@ -88,18 +88,20 @@ export function validateMappingRows(
     else if (type === 'EMPLOYEE' && !lookups.employeeCodes.has(code))
       fail('code', 'EMPLOYEE_UNKNOWN', code);
 
+    if (floorCode !== null && !lookups.floorCodes.has(floorCode))
+      fail('floorCode', 'FLOOR_UNKNOWN', floorCode);
     if (type === 'EMPLOYEE') {
-      // BR-63: floor and canteen come from the meal unit; only cost center is set per employee.
-      if (floorCode !== null) fail('floorCode', 'EMPLOYEE_FLOOR_OR_CANTEEN', floorCode);
-      if (canteenCode !== null) fail('canteenCode', 'EMPLOYEE_FLOOR_OR_CANTEEN', canteenCode);
+      // BR-63: the canteen comes from the meal unit and the cost center from the org tree; only
+      // the pick-up floor is set per employee.
+      if (canteenCode !== null) fail('canteenCode', 'EMPLOYEE_CANTEEN_OR_COST_CENTER', canteenCode);
+      if (costCenterCode !== null)
+        fail('costCenterCode', 'EMPLOYEE_CANTEEN_OR_COST_CENTER', costCenterCode);
     } else {
-      if (floorCode !== null && !lookups.floorCodes.has(floorCode))
-        fail('floorCode', 'FLOOR_UNKNOWN', floorCode);
       if (canteenCode !== null && !lookups.canteenCodes.has(canteenCode))
         fail('canteenCode', 'CANTEEN_UNKNOWN', canteenCode);
+      if (costCenterCode !== null && !lookups.costCenterCodes.has(costCenterCode))
+        fail('costCenterCode', 'COST_CENTER_UNKNOWN', costCenterCode);
     }
-    if (costCenterCode !== null && !lookups.costCenterCodes.has(costCenterCode))
-      fail('costCenterCode', 'COST_CENTER_UNKNOWN', costCenterCode);
 
     const key = `${type}:${code}`;
     if (code !== '' && seen.has(key)) fail('code', 'DUPLICATE_TARGET', code);

@@ -107,3 +107,17 @@ export function isoWeekdayOf(date: DateString): number {
 export function mondayOf(date: DateString): DateString {
   return addDays(date, -(isoWeekdayOf(date) - 1));
 }
+
+/**
+ * ISO 8601 week of a date: weeks start on Monday and week 1 is the week with the year's first
+ * Thursday (so 29/12 can be week 1 of the next year and 1/1 week 52 or 53 of the last). Shown as
+ * "Tuần 43" next to a week range (product owner, 2026-10-23).
+ */
+export function isoWeekOf(date: DateString): { year: number; week: number } {
+  const thursday = addDays(date, 4 - isoWeekdayOf(date));
+  const { year } = parseDateString(thursday);
+  const jan1 = Date.UTC(year, 0, 1);
+  const { month, day } = parseDateString(thursday);
+  const dayOfYear = Math.round((Date.UTC(year, month - 1, day) - jan1) / MS_PER_DAY);
+  return { year, week: Math.floor(dayOfYear / 7) + 1 };
+}

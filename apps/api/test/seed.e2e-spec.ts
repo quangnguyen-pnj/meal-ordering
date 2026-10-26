@@ -65,7 +65,7 @@ describe('seeded database', () => {
     for (const e of employees) {
       const a = resolveEmployeeMealAssignment({
         orgUnitId: e.orgUnitId,
-        costCenterOverrideId: e.costCenterOverrideId,
+        floorOverrideId: e.floorOverrideId,
         index,
       });
       if (a.mealUnitId !== e.mealUnitId) disagreements++;

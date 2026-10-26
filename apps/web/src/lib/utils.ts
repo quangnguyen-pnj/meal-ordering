@@ -1,6 +1,7 @@
-import { addDays, lastAcceptedMinute } from '@meal/shared';
+import { addDays, isoWeekOf, lastAcceptedMinute } from '@meal/shared';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { t } from '@/messages';
 
 export function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs));
@@ -36,6 +37,11 @@ export function formatWeekRange(weekStart: string): string {
   const [, sm, sd] = weekStart.split('-');
   const [ey, em, ed] = end.split('-');
   return `${sd}/${sm} – ${ed}/${em}/${ey}`;
+}
+
+/** "Tuần 43" (ISO 8601 week) for the Monday YYYY-MM-DD of a week. */
+export function formatWeekNumber(weekStart: string): string {
+  return t('common.weekNumber', { week: isoWeekOf(weekStart).week });
 }
 
 /** "1–50 / 1.700" for a page of a list. */

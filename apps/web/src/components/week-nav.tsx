@@ -3,10 +3,10 @@
 import { addDays } from '@meal/shared';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { formatWeekRange } from '@/lib/utils';
+import { formatWeekNumber, formatWeekRange } from '@/lib/utils';
 import { t } from '@/messages';
 
-/** Previous / next week with the Monday–Sunday range, and a jump back to the default week. */
+/** Previous / next week with its ISO week number and Monday–Sunday range, and a jump back to the default week. */
 export function WeekNav({
   weekStart,
   onChange,
@@ -27,8 +27,12 @@ export function WeekNav({
       >
         <ChevronLeft className="h-4 w-4" aria-hidden />
       </Button>
-      <p className="min-w-44 text-center text-sm font-medium tabular-nums" aria-live="polite">
-        {formatWeekRange(weekStart)}
+      <p
+        className="flex min-w-44 flex-col items-center text-center text-sm font-medium tabular-nums"
+        aria-live="polite"
+      >
+        <span className="text-xs font-semibold text-primary">{formatWeekNumber(weekStart)}</span>
+        <span>{formatWeekRange(weekStart)}</span>
       </p>
       <Button
         variant="outline"

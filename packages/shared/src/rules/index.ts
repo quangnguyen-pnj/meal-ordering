@@ -8,3 +8,5 @@ export * from './org-sync';
 export * from './permissions';
 export * from './pin';
 export * from './sso';
+export * from './library-import';
+export * from './registration-import';

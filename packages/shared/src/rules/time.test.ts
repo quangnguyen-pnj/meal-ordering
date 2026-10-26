@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isoWeekOf,
   addDays,
   isoWeekdayOf,
   mondayOf,
@@ -41,5 +42,20 @@ describe('time helpers (Asia/Ho_Chi_Minh, UTC+7)', () => {
     expect(() => parseDateString('26-02-10')).toThrow(RangeError);
     expect(() => parseTimeOfDay('24:00')).toThrow(RangeError);
     expect(parseTimeOfDay('08:10')).toBe(490);
+  });
+});
+
+describe('ISO week number', () => {
+  it('counts weeks from the week with the first Thursday', () => {
+    expect(isoWeekOf('2026-10-23')).toEqual({ year: 2026, week: 43 });
+    expect(isoWeekOf('2026-07-06')).toEqual({ year: 2026, week: 28 });
+    expect(isoWeekOf('2026-01-01')).toEqual({ year: 2026, week: 1 });
+  });
+
+  it('puts year-end and new-year days in the week their Thursday falls in', () => {
+    expect(isoWeekOf('2024-12-30')).toEqual({ year: 2025, week: 1 });
+    expect(isoWeekOf('2027-01-01')).toEqual({ year: 2026, week: 53 });
+    expect(isoWeekOf('2027-01-03')).toEqual({ year: 2026, week: 53 });
+    expect(isoWeekOf('2027-01-04')).toEqual({ year: 2027, week: 1 });
   });
 });

@@ -10,6 +10,7 @@ import {
   type GridSaveResult,
   type ListScope,
   type NotRegisteredView,
+  type OrgFilterOption,
   type RegistrationGridView,
   type RegistrationProgressView,
   type RegistrationUnitOption,
@@ -18,7 +19,7 @@ import { AuditService } from '../audit/audit.service';
 import { ClockService } from '../clock/clock.service';
 import { invalid, invalidState, notFound } from '../common/api-error';
 import { employeeScopeWhere } from '../employees/employees.service';
-import { loadOrg, orgPathName, type OrgSnapshot } from '../org/org-index';
+import { loadOrg, orgFilterOptions, orgPathName, type OrgSnapshot } from '../org/org-index';
 import { PrismaService } from '../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import { ForecastService } from './forecast.service';
@@ -83,6 +84,11 @@ export class AdminRegistrationsService {
         employeeCount: counts.get(n.id) ?? 0,
       }))
       .sort((a, b) => a.pathName.localeCompare(b.pathName, 'vi'));
+  }
+
+  /** Khối / Trung tâm / Phòng ban filter options within the caller's scope. */
+  async orgUnits(scope: ListScope, factoryId: string): Promise<OrgFilterOption[]> {
+    return orgFilterOptions(await loadOrg(this.prisma, factoryId), scope);
   }
 
   /** Meals per employee in the week (or one day) of each employee's own canteen menu. */
@@ -177,9 +183,19 @@ export class AdminRegistrationsService {
     factoryId: string,
     weekStart: string,
     date: string | null,
+    orgUnitId: string | null = null,
   ): Promise<NotRegisteredView> {
     assertMonday(weekStart);
-    const { org, employees } = await this.scopedRegistrable(scope, factoryId, weekStart);
+    const scoped = await this.scopedRegistrable(scope, factoryId, weekStart);
+    const { org } = scoped;
+    // Khối / Trung tâm / Phòng ban filter, on top of the guard's scope (never widens it).
+    const under = orgUnitId ? org.byId.get(orgUnitId)?.path : undefined;
+    const employees =
+      orgUnitId === null
+        ? scoped.employees
+        : scoped.employees.filter(
+            (e) => under !== undefined && org.byId.get(e.orgUnitId)?.path.startsWith(under),
+          );
     const { meals, weeks } = await this.mealsByEmployee(employees, weekStart, date);
     const items = employees
       .filter((e) => {
@@ -331,90 +347,139 @@ export class AdminRegistrationsService {
     date: string,
     input: GridDaySave,
   ): Promise<GridSaveResult> {
-    await this.forecast.closeDueWeeks(factoryId);
-    const found = await this.store.publishedDay(this.prisma, input.canteenId, date);
-    if (!found || found.week.factoryId !== factoryId) {
-      throw invalidState('No published serving day for this canteen and date (BR-02)');
-    }
-    const { week, day } = found;
-    const lockTime = await this.settings.get(factoryId, 'day.lockTime');
-    const windowAt = (now: Date) => adminDayWindow({ now, date, lockTime, finalized: false });
-    if (windowAt(this.clock.now()) !== 'ON_BEHALF') throw dayLocked(date);
+    return this.saveGridDays(actorId, factoryId, orgUnitId, input.canteenId, [
+      { date, rows: input.rows },
+    ]);
+  }
 
-    const { org, unit } = await this.unitEmployees(factoryId, orgUnitId, week.weekStart);
-    const codes = input.rows.map((r) => r.employeeCode);
-    const employees = await this.store.employees(
-      this.prisma,
-      factoryId,
-      { employeeCode: { in: codes } },
-      org,
-    );
-    const byCode = new Map(employees.map((e) => [e.employeeCode, e]));
-    const itemIds = new Set(day.items.map((i) => i.id));
-    const errors: Array<{ employeeCode: string; code: string; menuItemId?: string }> = [];
-    const seen = new Set<string>();
-    for (const row of input.rows) {
-      const e = byCode.get(row.employeeCode);
-      const hasMeals = row.lines.some((l) => l.quantity > 0);
-      if (seen.has(row.employeeCode)) {
-        errors.push({ employeeCode: row.employeeCode, code: 'DUPLICATE_ROW' });
-        continue;
+  /**
+   * The grid save for several days of one canteen's week at once (the Excel import): every day
+   * is validated first, then all are written in one transaction, so a file is applied whole or
+   * not at all. Same rules and audit as one grid day.
+   */
+  async saveGridDays(
+    actorId: string,
+    factoryId: string,
+    orgUnitId: string,
+    canteenId: string,
+    days: ReadonlyArray<{ date: string; rows: GridDaySave['rows'] }>,
+  ): Promise<GridSaveResult & { days: number }> {
+    await this.forecast.closeDueWeeks(factoryId);
+    const lockTime = await this.settings.get(factoryId, 'day.lockTime');
+    const windowAt = (now: Date, date: string) =>
+      adminDayWindow({ now, date, lockTime, finalized: false });
+    const prepared: Array<{ date: string; rows: GridDaySave['rows'] }> = [];
+    let week: LoadedWeek | null = null;
+    let unitPath = '';
+    let org: OrgSnapshot | null = null;
+    const byCode = new Map<string, EmployeeForRegistration>();
+    const errors: Array<{
+      employeeCode: string;
+      code: string;
+      menuItemId?: string;
+      date?: string;
+    }> = [];
+
+    for (const input of days) {
+      const { date } = input;
+      const found = await this.store.publishedDay(this.prisma, canteenId, date);
+      if (!found || found.week.factoryId !== factoryId || (week && found.week.id !== week.id)) {
+        throw invalidState('No published serving day for this canteen and date (BR-02)', {
+          date,
+        });
       }
-      seen.add(row.employeeCode);
-      if (!e || !org.byId.get(e.orgUnitId)?.path.startsWith(unit.path)) {
-        errors.push({ employeeCode: row.employeeCode, code: 'NOT_IN_UNIT' });
-        continue;
+      const day = found.day;
+      if (!week) {
+        week = found.week;
+        const loaded = await this.unitEmployees(factoryId, orgUnitId, week.weekStart);
+        org = loaded.org;
+        unitPath = loaded.unit.path;
       }
-      if (!e.assignment.canRegister || e.assignment.canteenId !== input.canteenId) {
-        errors.push({ employeeCode: row.employeeCode, code: 'CANNOT_REGISTER' });
-        continue;
+      if (windowAt(this.clock.now(), date) !== 'ON_BEHALF') throw dayLocked(date);
+
+      const missing = input.rows.map((r) => r.employeeCode).filter((c) => !byCode.has(c));
+      if (missing.length > 0) {
+        const found = await this.store.employees(
+          this.prisma,
+          factoryId,
+          { employeeCode: { in: missing } },
+          org!,
+        );
+        for (const e of found) byCode.set(e.employeeCode, e);
       }
-      if (hasMeals && isLeft(e, date)) {
-        errors.push({ employeeCode: row.employeeCode, code: 'LEFT' });
-        continue;
+      const itemIds = new Set(day.items.map((i) => i.id));
+      const seen = new Set<string>();
+      const where = days.length > 1 ? { date } : {};
+      for (const row of input.rows) {
+        const e = byCode.get(row.employeeCode);
+        const hasMeals = row.lines.some((l) => l.quantity > 0);
+        if (seen.has(row.employeeCode)) {
+          errors.push({ employeeCode: row.employeeCode, code: 'DUPLICATE_ROW', ...where });
+          continue;
+        }
+        seen.add(row.employeeCode);
+        if (!e || !org!.byId.get(e.orgUnitId)?.path.startsWith(unitPath)) {
+          errors.push({ employeeCode: row.employeeCode, code: 'NOT_IN_UNIT', ...where });
+          continue;
+        }
+        if (!e.assignment.canRegister || e.assignment.canteenId !== canteenId) {
+          errors.push({ employeeCode: row.employeeCode, code: 'CANNOT_REGISTER', ...where });
+          continue;
+        }
+        if (hasMeals && isLeft(e, date)) {
+          errors.push({ employeeCode: row.employeeCode, code: 'LEFT', ...where });
+          continue;
+        }
+        const res = validateDaySelection(row.lines, itemIds);
+        if (!res.ok)
+          errors.push(
+            ...res.errors.map((x) => ({ employeeCode: row.employeeCode, ...x, ...where })),
+          );
       }
-      const res = validateDaySelection(row.lines, itemIds);
-      if (!res.ok)
-        errors.push(...res.errors.map((x) => ({ employeeCode: row.employeeCode, ...x })));
+      prepared.push(input);
     }
     if (errors.length > 0) throw invalid('Invalid grid rows', errors);
+    if (!week) return { changedEmployees: 0, meals: 0, days: 0 };
+    const weekId = week.id;
 
-    let changedEmployees = 0;
+    const changed = new Set<string>();
     let meals = 0;
     await this.prisma.$transaction(
       async (tx) => {
-        const forecastTaken = await this.store.lockWeek(tx, week.id);
-        if (windowAt(this.clock.now()) !== 'ON_BEHALF') throw dayLocked(date);
-        const ids = input.rows.map((r) => byCode.get(r.employeeCode)!.id);
-        const existing = await this.store.rowsOf(tx, ids, [date]);
-        for (const row of input.rows) {
-          const e = byCode.get(row.employeeCode)!;
-          const res = await this.store.applyDay(tx, {
-            employeeId: e.id,
-            date,
-            lines: row.lines,
-            existing: existing.filter((r) => r.employeeId === e.id),
-            source: 'ADMIN',
-          });
-          meals += sumQuantities(res.after);
-          if (!res.changed) continue;
-          changedEmployees += 1;
-          await this.audit.log(
-            {
-              actorId,
-              action: 'registration.onBehalf',
-              entityType: 'RegistrationDay',
-              entityId: `${e.employeeCode}:${date}`,
-              before: { quantities: res.before },
-              after: { quantities: res.after, menuWeekId: week.id, afterClose: forecastTaken },
-            },
-            tx,
-          );
+        const forecastTaken = await this.store.lockWeek(tx, weekId);
+        for (const { date, rows } of prepared) {
+          if (windowAt(this.clock.now(), date) !== 'ON_BEHALF') throw dayLocked(date);
+          const ids = rows.map((r) => byCode.get(r.employeeCode)!.id);
+          const existing = await this.store.rowsOf(tx, ids, [date]);
+          for (const row of rows) {
+            const e = byCode.get(row.employeeCode)!;
+            const res = await this.store.applyDay(tx, {
+              employeeId: e.id,
+              date,
+              lines: row.lines,
+              existing: existing.filter((r) => r.employeeId === e.id),
+              source: 'ADMIN',
+            });
+            meals += sumQuantities(res.after);
+            if (!res.changed) continue;
+            changed.add(e.id);
+            await this.audit.log(
+              {
+                actorId,
+                action: 'registration.onBehalf',
+                entityType: 'RegistrationDay',
+                entityId: `${e.employeeCode}:${date}`,
+                before: { quantities: res.before },
+                after: { quantities: res.after, menuWeekId: weekId, afterClose: forecastTaken },
+              },
+              tx,
+            );
+          }
         }
       },
       { timeout: 120_000 },
     );
-    return { changedEmployees, meals };
+    return { changedEmployees: changed.size, meals, days: prepared.length };
   }
 
   /**

@@ -9,7 +9,11 @@ import {
   Put,
   Query,
   Req,
+  Res,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   DateStringSchema,
   DaySelectionSchema,
@@ -22,13 +26,19 @@ import {
   type MyWeekSave,
   upcomingWeekStart,
 } from '@meal/shared';
+import type { Response } from 'express';
 import { z } from 'zod';
 import { ClockService } from '../clock/clock.service';
+import { invalid } from '../common/api-error';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import { CurrentPrincipal, RequirePermission } from '../rbac/decorators';
 import type { AuthedRequest, RequestPrincipal } from '../rbac/rbac.types';
 import { AdminRegistrationsService } from './admin-registrations.service';
 import { MyRegistrationsService } from './my-registrations.service';
+import { RegistrationImportService } from './registration-import.service';
+
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 const DateParam = new ZodValidationPipe(DateStringSchema);
 const WeekQuerySchema = z.object({ weekStart: DateStringSchema.optional() });
@@ -42,11 +52,22 @@ const AdminWeekQuerySchema = z.object({ weekStart: DateStringSchema });
 const NotRegisteredQuerySchema = z.object({
   weekStart: DateStringSchema,
   date: DateStringSchema.optional(),
+  /** Khối / Trung tâm / Phòng ban filter: employees at or below this node. */
+  orgUnitId: z.string().min(1).optional(),
 });
-const GridQuerySchema = z.object({
-  weekStart: DateStringSchema,
-  canteenId: z.string().min(1).optional(),
+const ImportQuerySchema = GridQuerySchemaBase().extend({
+  apply: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((v) => v === 'true'),
 });
+function GridQuerySchemaBase() {
+  return z.object({
+    weekStart: DateStringSchema,
+    canteenId: z.string().min(1).optional(),
+  });
+}
+const GridQuerySchema = GridQuerySchemaBase();
 
 const OWN = ['menu.registerOwn', { type: 'self' }] as const;
 
@@ -138,6 +159,7 @@ const ON_BEHALF_UNIT = [
 export class AdminRegistrationsController {
   constructor(
     private readonly admin: AdminRegistrationsService,
+    private readonly imports: RegistrationImportService,
     private readonly clock: ClockService,
   ) {}
 
@@ -175,7 +197,14 @@ export class AdminRegistrationsController {
       p.factoryId,
       q.weekStart,
       q.date ?? null,
+      q.orgUnitId ?? null,
     );
+  }
+
+  @RequirePermission('registration.notRegisteredList', { type: 'list' })
+  @Get('org-units')
+  async orgUnits(@Req() req: AuthedRequest, @CurrentPrincipal() p: RequestPrincipal) {
+    return { items: await this.admin.orgUnits(req.listScope ?? { kind: 'none' }, p.factoryId) };
   }
 
   @RequirePermission(...ON_BEHALF_UNIT)
@@ -197,6 +226,38 @@ export class AdminRegistrationsController {
     @CurrentPrincipal() p: RequestPrincipal,
   ) {
     return this.admin.saveGridDay(p.employeeId, p.factoryId, orgUnitId, date, body);
+  }
+
+  /** The unit's week as an Excel file to fill in (same rows and meals as the grid). */
+  @RequirePermission(...ON_BEHALF_UNIT)
+  @Get('units/:orgUnitId/import-template')
+  async importTemplate(
+    @Param('orgUnitId') orgUnitId: string,
+    @Query(new ZodValidationPipe(GridQuerySchema)) q: z.infer<typeof GridQuerySchema>,
+    @CurrentPrincipal() p: RequestPrincipal,
+    @Res() res: Response,
+  ) {
+    const file = await this.imports.template(p.factoryId, orgUnitId, q.weekStart, q.canteenId);
+    res
+      .status(200)
+      .setHeader('content-type', XLSX_MIME)
+      .setHeader('content-disposition', `attachment; filename="dang-ky-${q.weekStart}.xlsx"`)
+      .send(file);
+  }
+
+  /** Validates an uploaded week (preview) or, with `apply=true`, saves it all at once. */
+  @RequirePermission(...ON_BEHALF_UNIT)
+  @Post('units/:orgUnitId/import')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 } }))
+  importWeek(
+    @Param('orgUnitId') orgUnitId: string,
+    @Query(new ZodValidationPipe(ImportQuerySchema)) q: z.infer<typeof ImportQuerySchema>,
+    @UploadedFile() file: { buffer: Buffer } | undefined,
+    @CurrentPrincipal() p: RequestPrincipal,
+  ) {
+    if (!file) throw invalid('File is required', [{ path: 'file', message: 'FILE_REQUIRED' }]);
+    return this.imports.importWeek(p.employeeId, p.factoryId, orgUnitId, q, file.buffer);
   }
 
   /** BR-25: extra meals after the lock, with a reason. */

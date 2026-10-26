@@ -84,6 +84,8 @@ export function ChangePinForm({ forced }: { forced: boolean }) {
 
   return (
     <form
+      // POST, never the default GET: a submit before hydration must not put the PIN in the URL.
+      method="post"
       noValidate
       onSubmit={form.handleSubmit((v) => change.mutate(v))}
       className="flex flex-col gap-4"

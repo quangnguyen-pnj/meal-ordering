@@ -1,4 +1,4 @@
-import type { MenuWeekView } from '@meal/shared';
+import { menuWeekGaps, type MenuDayGap, type MenuWeekView } from '@meal/shared';
 import { createStore } from 'zustand/vanilla';
 
 export interface DraftItem {
@@ -89,3 +89,18 @@ export function createMenuBuilderStore() {
 }
 
 export type MenuBuilderStore = ReturnType<typeof createMenuBuilderStore>;
+
+/**
+ * The serving days that keep the draft from being published: each needs at least one main dish
+ * and one dessert (product owner, 2026-10-23). The API checks the same again.
+ */
+export function draftGaps(days: readonly DraftDay[]): Array<{ date: string; gaps: MenuDayGap[] }> {
+  return menuWeekGaps(
+    days.map((d) => ({
+      date: d.date,
+      isServing: d.isServing,
+      mainCount: d.items.length,
+      dessertCount: d.dessertIds.length,
+    })),
+  );
+}

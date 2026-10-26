@@ -92,7 +92,7 @@ export class ForecastService {
           select: {
             id: true,
             orgUnitId: true,
-            costCenterOverrideId: true,
+            floorOverrideId: true,
             dmpCostCenterCode: true,
           },
         });
@@ -104,7 +104,7 @@ export class ForecastService {
           employees.map((e) => {
             const a = resolveEmployeeMealAssignment({
               orgUnitId: e.orgUnitId,
-              costCenterOverrideId: e.costCenterOverrideId,
+              floorOverrideId: e.floorOverrideId,
               dmpCostCenterId: e.dmpCostCenterCode
                 ? (ccByCode.get(e.dmpCostCenterCode) ?? null)
                 : null,

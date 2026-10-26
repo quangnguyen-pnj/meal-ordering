@@ -1,68 +1,120 @@
-import type { DishType } from '../enums';
 import { addDays, isoWeekdayOf, type DateString } from './time';
-
-/** BR-12: type labels used in a meal's display name. */
-export const DISH_TYPE_LABELS: Readonly<Record<DishType, string>> = {
-  CHAY: 'Chay',
-  CHAO: 'Cháo',
-  MAN: 'Mặn',
-};
 
 /**
  * BR-12: a meal is shown as its type in brackets, then the dish name, e.g.
- * "[Chay] Gạo lứt muối mè". The brackets are literal (product owner's choice, 2026-10-21).
+ * "[Chay] Gạo lứt muối mè". The brackets are literal (product owner's choice, 2026-10-21). Dish
+ * types are master data since 2026-10-23, so the label is the type's own name; screens also draw
+ * it in the type's colour.
  */
-export function mealDisplayName(type: DishType, dishName: string): string {
-  return `[${DISH_TYPE_LABELS[type]}] ${dishName.trim()}`;
+export function mealDisplayName(typeName: string, dishName: string): string {
+  return `[${typeName.trim()}] ${dishName.trim()}`;
+}
+
+/** Library names are stored trimmed with single spaces, so "Cá  kho " and "Cá kho" are one dish. */
+export function normalizeLibraryName(name: string): string {
+  return name.normalize('NFC').trim().replace(/\s+/g, ' ');
+}
+
+/** Case-insensitive key that decides whether two library entries are the same (no duplicates). */
+export function libraryNameKey(name: string): string {
+  return normalizeLibraryName(name).toLocaleLowerCase('vi');
 }
 
 /**
- * BR-13: the usual mix of a serving day. A different mix only warns; it never blocks publishing.
+ * BR-13: how many dishes of a type a serving day usually has. Each dish type (master data) carries
+ * its own optional bounds; a type with neither bound is not checked. The seed keeps the plan's mix:
+ * Chay 1, Cháo 1, Mặn 2–3. A different mix only warns; it never blocks publishing.
  */
-export const USUAL_MENU_MIX: Readonly<Record<DishType, { min: number; max: number }>> = {
-  CHAY: { min: 1, max: 1 },
-  CHAO: { min: 1, max: 1 },
-  MAN: { min: 2, max: 3 },
-};
+export interface MenuMixRule {
+  typeId: string;
+  typeName: string;
+  minPerDay: number | null;
+  maxPerDay: number | null;
+}
 
 export interface MenuMixIssue {
-  type: DishType;
+  typeId: string;
+  typeName: string;
   actual: number;
-  min: number;
-  max: number;
+  min: number | null;
+  max: number | null;
 }
 
 export interface MenuMixCheck {
   usual: boolean;
-  counts: Record<DishType, number>;
+  /** Dishes per type id. */
+  counts: Record<string, number>;
   issues: MenuMixIssue[];
 }
 
-/** BR-13: compares one day's main-dish types with the usual 1 Chay + 1 Cháo + 2–3 Mặn. */
-export function checkMenuMix(types: readonly DishType[]): MenuMixCheck {
-  const counts: Record<DishType, number> = { CHAY: 0, CHAO: 0, MAN: 0 };
-  for (const type of types) counts[type] += 1;
+/** BR-13: compares one day's main-dish types (ids) with each type's usual bounds. */
+export function checkMenuMix(
+  typeIds: readonly string[],
+  rules: readonly MenuMixRule[],
+): MenuMixCheck {
+  const counts: Record<string, number> = {};
+  for (const id of typeIds) counts[id] = (counts[id] ?? 0) + 1;
   const issues: MenuMixIssue[] = [];
-  for (const type of Object.keys(USUAL_MENU_MIX) as DishType[]) {
-    const { min, max } = USUAL_MENU_MIX[type];
-    if (counts[type] < min || counts[type] > max) {
-      issues.push({ type, actual: counts[type], min, max });
+  for (const rule of rules) {
+    if (rule.minPerDay === null && rule.maxPerDay === null) continue;
+    const actual = counts[rule.typeId] ?? 0;
+    if (
+      (rule.minPerDay !== null && actual < rule.minPerDay) ||
+      (rule.maxPerDay !== null && actual > rule.maxPerDay)
+    ) {
+      issues.push({
+        typeId: rule.typeId,
+        typeName: rule.typeName,
+        actual,
+        min: rule.minPerDay,
+        max: rule.maxPerDay,
+      });
     }
   }
   return { usual: issues.length === 0, counts, issues };
 }
 
+export type MenuDayGap = 'MAIN' | 'DESSERT';
+
 /**
- * BR-08: the days a menu week offers. Monday–Saturday are always listed so the HC admin can turn
- * Saturday on per week; Sunday only when the `servingDays` setting includes it.
+ * A week can be published only when every serving day has at least one main dish and at least one
+ * dessert (product owner, 2026-10-23). Days that do not serve are skipped. The same check guards
+ * edits of a published day, so a published day never loses its last main dish or dessert.
  */
-export function menuWeekDates(weekStart: DateString, servingDays: readonly number[]): DateString[] {
+export function menuDayGaps(day: {
+  isServing: boolean;
+  mainCount: number;
+  dessertCount: number;
+}): MenuDayGap[] {
+  if (!day.isServing) return [];
+  const gaps: MenuDayGap[] = [];
+  if (day.mainCount < 1) gaps.push('MAIN');
+  if (day.dessertCount < 1) gaps.push('DESSERT');
+  return gaps;
+}
+
+/** Every serving day with what it lacks; empty when the week can be published. */
+export function menuWeekGaps(
+  days: ReadonlyArray<{
+    date: DateString;
+    isServing: boolean;
+    mainCount: number;
+    dessertCount: number;
+  }>,
+): Array<{ date: DateString; gaps: MenuDayGap[] }> {
+  return days.map((d) => ({ date: d.date, gaps: menuDayGaps(d) })).filter((d) => d.gaps.length > 0);
+}
+
+/**
+ * BR-08: the days a menu week offers. Monday–Sunday are always listed so the HC admin can turn
+ * Saturday or Sunday on per week (product owner, 2026-10-23: Sunday was missing). Which days serve
+ * by default still comes from the `servingDays` setting (`isDefaultServingDay`).
+ */
+export function menuWeekDates(weekStart: DateString): DateString[] {
   if (isoWeekdayOf(weekStart) !== 1) {
     throw new RangeError(`weekStart must be a Monday, got ${weekStart}`);
   }
-  const days = [0, 1, 2, 3, 4, 5].map((offset) => addDays(weekStart, offset));
-  if (servingDays.includes(7)) days.push(addDays(weekStart, 6));
-  return days;
+  return [0, 1, 2, 3, 4, 5, 6].map((offset) => addDays(weekStart, offset));
 }
 
 /** BR-08: a day serves by default when its weekday is in the `servingDays` setting. */

@@ -4,14 +4,20 @@ import {
   addDays,
   type GridSaveResult,
   type NotRegisteredView,
+  type OrgFilterOption,
   type RegistrationGridView,
+  type RegistrationImportView,
   type RegistrationProgressView,
 } from '@meal/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { FileSpreadsheet } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { AppDialog } from '@/components/app-dialog';
 import { useConfirm } from '@/components/confirm-dialog';
+import { DishName } from '@/components/dish-name';
+import { ExcelImportDialog } from '@/components/excel-import-dialog';
+import { OrgLevelFilter } from '@/components/org-level-filter';
 import { ResponsiveSelect } from '@/components/responsive-select';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -152,25 +158,41 @@ function ProgressTab({ weekStart }: { weekStart: string }) {
 
 function NotRegisteredTab({ weekStart }: { weekStart: string }) {
   const [date, setDate] = useState('');
+  const [orgUnitId, setOrgUnitId] = useState('');
   const query = useQuery({
-    queryKey: ['/admin/registrations/not-registered', weekStart, date],
-    queryFn: () =>
-      api.get<NotRegisteredView>(
-        `/admin/registrations/not-registered?weekStart=${weekStart}${date ? `&date=${date}` : ''}`,
-      ),
+    queryKey: ['/admin/registrations/not-registered', weekStart, date, orgUnitId],
+    queryFn: () => {
+      const q = new URLSearchParams({ weekStart });
+      if (date) q.set('date', date);
+      if (orgUnitId) q.set('orgUnitId', orgUnitId);
+      return api.get<NotRegisteredView>(`/admin/registrations/not-registered?${q}`);
+    },
+  });
+  // Khối / Trung tâm / Phòng ban filter, within the caller's scope.
+  const orgUnits = useQuery({
+    queryKey: ['/admin/registrations/org-units'],
+    queryFn: () => api.get<{ items: OrgFilterOption[] }>('/admin/registrations/org-units'),
   });
   const options = [
     { value: '', label: t('registrations.allWeek') },
-    ...[0, 1, 2, 3, 4, 5].map((i) => {
+    ...[0, 1, 2, 3, 4, 5, 6].map((i) => {
       const d = addDays(weekStart, i);
       return { value: d, label: `${weekdayName(d)} ${formatDate(d)}` };
     }),
   ];
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex w-full flex-col gap-2 sm:w-56">
-        <Label htmlFor="nr-day">{t('history.date')}</Label>
-        <ResponsiveSelect id="nr-day" value={date} onValueChange={setDate} options={options} />
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex w-full flex-col gap-2 sm:w-56">
+          <Label htmlFor="nr-day">{t('history.date')}</Label>
+          <ResponsiveSelect id="nr-day" value={date} onValueChange={setDate} options={options} />
+        </div>
+        <OrgLevelFilter
+          id="nr-org"
+          options={orgUnits.data?.items ?? []}
+          value={orgUnitId}
+          onChange={setOrgUnitId}
+        />
       </div>
       {query.error ? <Alert variant="destructive">{apiErrorText(query.error)}</Alert> : null}
       {query.isLoading ? <LoadingRows /> : null}
@@ -226,6 +248,7 @@ function GridTab({ weekStart }: { weekStart: string }) {
   const [date, setDate] = useState('');
   const [values, setValues] = useState<GridValues>({});
   const [extraFor, setExtraFor] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const grid = useRegistrationGrid(unitId, weekStart, canteenId);
   const view = grid.data;
 
@@ -298,7 +321,26 @@ function GridTab({ weekStart }: { weekStart: string }) {
           }}
         />
         <CanteenPicker id="grid-canteen" grid={view} onChange={setCanteenId} />
+        {view?.state === 'PUBLISHED' && view.days.some((d) => d.window === 'ON_BEHALF') ? (
+          <Button variant="outline" className="ml-auto" onClick={() => setImportOpen(true)}>
+            <FileSpreadsheet className="h-4 w-4" aria-hidden />
+            {t('registrations.import.open')}
+          </Button>
+        ) : null}
       </div>
+      {view?.state === 'PUBLISHED' ? (
+        <WeekImport
+          open={importOpen}
+          onClose={() => setImportOpen(false)}
+          unitId={unitId}
+          weekStart={weekStart}
+          canteenId={view.canteenId!}
+          unsavedDay={dirty}
+          onApplied={async () => {
+            await qc.invalidateQueries({ predicate: (q) => isRegistrationQuery(q.queryKey) });
+          }}
+        />
+      ) : null}
       {grid.error ? <Alert variant="destructive">{apiErrorText(grid.error)}</Alert> : null}
       {grid.isLoading ? <LoadingRows /> : null}
       {view?.state === 'NOT_PUBLISHED' ? (
@@ -346,7 +388,7 @@ function GridTab({ weekStart }: { weekStart: string }) {
                     key={i.id}
                     className="min-w-20 whitespace-normal px-2 text-center normal-case tracking-normal"
                   >
-                    {i.displayName}
+                    <DishName type={i.type} displayName={i.displayName} />
                   </TableHead>
                 ))}
                 <TableHead className="px-2 text-right">{t('registrations.total')}</TableHead>
@@ -600,5 +642,87 @@ function ExtraDialog({
         </div>
       </form>
     </AppDialog>
+  );
+}
+
+/**
+ * The unit's week as an Excel file (2026-10-23): download it filled with the current quantities,
+ * edit it, check it, then save every changed day at once. The grid's rules apply (BR-21).
+ */
+function WeekImport({
+  open,
+  onClose,
+  unitId,
+  weekStart,
+  canteenId,
+  unsavedDay,
+  onApplied,
+}: {
+  open: boolean;
+  onClose: () => void;
+  unitId: string;
+  weekStart: string;
+  canteenId: string;
+  unsavedDay: boolean;
+  onApplied: () => Promise<void>;
+}) {
+  const base = `/admin/registrations/units/${encodeURIComponent(unitId)}`;
+  const query = `weekStart=${weekStart}&canteenId=${encodeURIComponent(canteenId)}`;
+  return (
+    <ExcelImportDialog<RegistrationImportView>
+      open={open}
+      onClose={onClose}
+      title={t('registrations.import.title')}
+      hint={`${t('registrations.import.hint')}${unsavedDay ? ` ${t('registrations.unsaved')}` : ''}`}
+      template={{
+        path: `${base}/import-template?${query}`,
+        fileName: `dang-ky-${weekStart}.xlsx`,
+      }}
+      labels={{
+        template: t('registrations.import.template'),
+        file: t('registrations.import.file'),
+        check: t('registrations.import.check'),
+      }}
+      upload={(file, apply) =>
+        api.upload<RegistrationImportView>(`${base}/import?${query}&apply=${apply}`, file)
+      }
+      summarize={(r) =>
+        r.status === 'REJECTED'
+          ? {
+              text: t('registrations.import.rejected', { count: r.errors.length }),
+              errors: r.errors.map((e) =>
+                t('registrations.import.rowError', {
+                  row: e.rowNumber,
+                  error: vi.registrations.import.errors[e.code],
+                  value: e.value || t('common.none'),
+                }),
+              ),
+              applyLabel: null,
+            }
+          : {
+              text:
+                r.status === 'APPLIED'
+                  ? t('registrations.import.applied', {
+                      employees: r.changedEmployees,
+                      days: r.changedDays,
+                    })
+                  : r.changedDays === 0
+                    ? t('registrations.import.nothing')
+                    : t('registrations.import.preview', {
+                        employees: r.changedEmployees,
+                        days: r.changedDays,
+                      }),
+              errors: [],
+              applyLabel:
+                r.changedDays > 0 ? t('registrations.import.apply', { days: r.changedDays }) : null,
+            }
+      }
+      onApplied={(r) => {
+        toast.success(
+          t('registrations.import.applied', { employees: r.changedEmployees, days: r.changedDays }),
+        );
+        void onApplied();
+      }}
+    />
   );
 }

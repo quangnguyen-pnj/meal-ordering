@@ -1,9 +1,11 @@
 import type { INestApplication } from '@nestjs/common';
+import ExcelJS from 'exceljs';
 import {
   addDays,
   type MyDayRegistrationView,
   type MyRegistrationWeekView,
   type RegistrationGridView,
+  type RegistrationImportView,
 } from '@meal/shared';
 import { MockDmpClient } from '../src/dmp/mock/mock-dmp.client';
 import { JobsService } from '../src/jobs/jobs.service';
@@ -64,6 +66,8 @@ const DISHES = {
 } as const;
 type DishKey = keyof typeof DISHES;
 const dishId: Partial<Record<DishKey, string>> = {};
+let dessertId = '';
+let gaId = ''; // not on any menu at first; replaces a dish after closeAt (BR-14)
 
 async function signInAll() {
   [hc, a, b, c, dept, deptOther, unassigned, sys] = await Promise.all([
@@ -89,7 +93,7 @@ async function publishWeek(weekStart: string) {
     date: addDays(weekStart, i),
     isServing: true,
     items: (Object.keys(DISHES) as DishKey[]).map((k) => ({ dishId: dishId[k]! })),
-    dessertIds: [],
+    dessertIds: [dessertId],
   }));
   const saved = await hc
     .put('/api/admin/menu/weeks')
@@ -154,13 +158,20 @@ beforeAll(async () => {
   });
   [B, C] = colleagues.map((e) => e.employeeCode) as [string, string];
   await at(PREV, '10:00'); // Monday of week N-1
+  const dish = (name: string, type: string) => ({
+    canteenId: 'ct_gv',
+    name,
+    typeId: `dt_fac_gv_${type}`,
+    sessions: ['LUNCH'],
+  });
   for (const [key, [name, type]] of Object.entries(DISHES)) {
-    const res = await hc
-      .post('/api/admin/dishes')
-      .send({ name, type, sessions: ['LUNCH'] })
-      .expect(201);
+    const res = await hc.post('/api/admin/dishes').send(dish(name, type)).expect(201);
     dishId[key as DishKey] = res.body.id;
   }
+  gaId = (await hc.post('/api/admin/dishes').send(dish('Gà kho gừng', 'MAN')).expect(201)).body.id;
+  dessertId = (
+    await hc.post('/api/admin/desserts').send({ canteenId: 'ct_gv', name: 'Chuối cau' }).expect(201)
+  ).body.id;
 });
 
 afterAll(async () => {
@@ -597,7 +608,7 @@ describe('P2 exit criterion: register, free edits, forecast at closeAt, BR-23 ch
         items: d.items
           .filter((i) => d.date !== WED || i.dishId !== dishId.thit)
           .map((i) => ({ id: i.id, dishId: i.dishId })),
-        dessertIds: [],
+        dessertIds: [dessertId],
       }));
     const saved = await hc
       .put('/api/admin/menu/weeks')
@@ -642,6 +653,55 @@ describe('P2 exit criterion: register, free edits, forecast at closeAt, BR-23 ch
         where: { action: 'registration.cancelledUnselected', actorId: null },
       }),
     ).toBeGreaterThanOrEqual(1);
+  });
+
+  it('BR-14: a dish replaced after closeAt shows a red note to the employees whose meal moved', async () => {
+    await at(TUE, '10:30');
+    const menu = await hc.get(`/api/admin/menu/weeks?canteenId=ct_gv&weekStart=${N}`).expect(200);
+    const thursday = menu.body.days.find((d: { date: string }) => d.date === THU);
+    const saved = await hc
+      .put('/api/admin/menu/weeks')
+      .send({
+        canteenId: 'ct_gv',
+        weekStart: N,
+        reason: 'NCC hết cá',
+        days: [
+          {
+            date: THU,
+            isServing: true,
+            items: thursday.items.map((i: { id: string; dishId: string }) => ({
+              id: i.id,
+              dishId: i.dishId === dishId.ca ? gaId : i.dishId,
+            })),
+            dessertIds: [dessertId],
+          },
+        ],
+      })
+      .expect(200);
+    expect(saved.body.effects.movedRegistrations).toBeGreaterThanOrEqual(1);
+
+    const ga = (await dayOf(a, THU)).items.find((i) => i.displayName === '[Mặn] Gà kho gừng')!;
+    expect(ga.quantity).toBe(1);
+    expect(ga.replacedAfterClose).toEqual({ from: '[Mặn] Cá basa kho' });
+    expect((await dayOf(a, THU)).items.filter((i) => i.replacedAfterClose)).toHaveLength(1);
+    // Someone who picks the new dish themselves gets no note.
+    await b
+      .put(`/api/registrations/me/days/${THU}`)
+      .send({ lines: [{ menuItemId: ga.menuItemId, quantity: 1 }] })
+      .expect(200);
+    const mine = (await dayOf(b, THU)).items.find((i) => i.menuItemId === ga.menuItemId)!;
+    expect(mine).toMatchObject({ quantity: 1, replacedAfterClose: null });
+    // Dismiss the in-app notice, so other test files counting banners are not affected.
+    const banners = (await a.get('/api/me/banners').expect(200)).body.items as Array<{
+      notificationId?: string;
+      notificationType?: string;
+      params: Record<string, string>;
+    }>;
+    const notice = banners.find(
+      (n) => n.notificationType === 'MENU_DISH_REPLACED' && n.params.date === THU,
+    )!;
+    expect(notice.params).toMatchObject({ from: '[Mặn] Cá basa kho', to: '[Mặn] Gà kho gừng' });
+    await a.post(`/api/me/notifications/${notice.notificationId}/read`).expect(200);
   });
 
   it('BR-36: a leaver loses their meals from the end date on sync', async () => {
@@ -718,6 +778,99 @@ describe('BR-07: a missed close-week job heals itself on the next request', () =
   });
 });
 
+describe('Khối / Trung tâm / Phòng ban filter on the not-registered list', () => {
+  it('lists only nodes in scope, and narrows the list to a node', async () => {
+    const options = (await dept.get('/api/admin/registrations/org-units').expect(200)).body.items;
+    expect(options.every((o: { id: string }) => o.id !== 'ou_XKH')).toBe(true);
+    expect(options[0]).toMatchObject({ id: 'ou_XCT', levelName: 'Phòng/Xưởng', level: 3 });
+    const all = await hc.get(`/api/admin/registrations/not-registered?weekStart=${N2}`).expect(200);
+    const team = await hc
+      .get(`/api/admin/registrations/not-registered?weekStart=${N2}&orgUnitId=${UNIT}`)
+      .expect(200);
+    expect(team.body.total).toBeGreaterThan(0);
+    expect(team.body.total).toBeLessThan(all.body.total);
+    // A dept admin filtering on a node outside their scope gets nobody, never more.
+    const outside = await dept
+      .get(`/api/admin/registrations/not-registered?weekStart=${N2}&orgUnitId=ou_XKH`)
+      .expect(200);
+    expect(outside.body.total).toBe(0);
+  });
+});
+
+describe('Excel import of a unit’s week (BR-21 rules)', () => {
+  const base = `/api/admin/registrations/units/${UNIT}`;
+  async function template() {
+    const res = await dept
+      .get(`${base}/import-template?weekStart=${N2}`)
+      .buffer(true)
+      .parse((r, cb) => {
+        const chunks: Buffer[] = [];
+        r.on('data', (c: Buffer) => chunks.push(c));
+        r.on('end', () => cb(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(res.body as ArrayBuffer);
+    return wb;
+  }
+  const upload = async (wb: ExcelJS.Workbook, apply: boolean) =>
+    (
+      await dept
+        .post(`${base}/import?weekStart=${N2}&apply=${apply}`)
+        .attach('file', Buffer.from(await wb.xlsx.writeBuffer()), 'dang-ky.xlsx')
+        .expect(200)
+    ).body as RegistrationImportView;
+
+  it('downloads the grid as a file, previews the changes and applies them at once', async () => {
+    const wb = await template();
+    const sheet = wb.worksheets[0]!;
+    expect(sheet.getRow(1).getCell(1).text).toBe('Mã NV');
+    expect(sheet.getRow(2).hidden).toBe(true);
+    const row = sheet.getRow(3);
+    const code = row.getCell(1).text;
+    // Unchanged file: nothing to do.
+    expect(await upload(wb, false)).toMatchObject({ status: 'PREVIEW', changedDays: 0 });
+    // 2 meals on the first column (Monday's first dish) and 1 on the last.
+    row.getCell(4).value = 2;
+    row.getCell(sheet.getRow(2).cellCount).value = 1;
+    const preview = await upload(wb, false);
+    expect(preview).toMatchObject({ status: 'PREVIEW', changedDays: 2, changedEmployees: 1 });
+    const applied = await upload(wb, true);
+    expect(applied).toMatchObject({ status: 'APPLIED', changedDays: 2 });
+    const grid = (await dept.get(`${base}/grid?weekStart=${N2}`).expect(200))
+      .body as RegistrationGridView;
+    const mine = grid.rows.find((r) => r.employeeCode === code)!;
+    expect(mine.cells[N2]!.quantities[grid.days[0]!.items[0]!.id]).toBe(2);
+    expect(
+      await db().auditLog.count({
+        where: { action: 'registration.onBehalf', entityId: { startsWith: `${code}:` } },
+      }),
+    ).toBeGreaterThanOrEqual(2);
+  });
+
+  it('one bad cell rejects the whole file and saves nothing', async () => {
+    const wb = await template();
+    const sheet = wb.worksheets[0]!;
+    sheet.getRow(3).getCell(4).value = 5;
+    sheet.getRow(4).getCell(4).value = '1.5';
+    sheet.addRow(['PNJP999999']);
+    const res = await upload(wb, true);
+    expect(res.status).toBe('REJECTED');
+    expect(res.errors.map((e) => e.code)).toEqual(['QUANTITY_INVALID', 'EMPLOYEE_NOT_IN_LIST']);
+    const grid = (await dept.get(`${base}/grid?weekStart=${N2}`).expect(200))
+      .body as RegistrationGridView;
+    const first = grid.rows.find((r) => r.employeeCode === sheet.getRow(3).getCell(1).text)!;
+    expect(first.cells[N2]!.quantities[grid.days[0]!.items[0]!.id]).not.toBe(5);
+  });
+
+  it('a file that is not the template is refused', async () => {
+    await dept
+      .post(`${base}/import?weekStart=${N2}`)
+      .attach('file', Buffer.from('not excel'), 'x.xlsx')
+      .expect(400);
+  });
+});
+
 describe('plan 7.1 rule 5: a 403 for every admin endpoint out of scope', () => {
   const grid: Endpoint = {
     method: 'get',
@@ -733,18 +886,27 @@ describe('plan 7.1 rule 5: a 403 for every admin endpoint out of scope', () => {
     url: `/api/admin/registrations/employees/${DEMO.employee}/extras`,
     body: { date: FRI, menuItemId: 'x', quantity: 1, reason: 'x' },
   };
+  const template: Endpoint = {
+    method: 'get',
+    url: `/api/admin/registrations/units/${UNIT}/import-template?weekStart=${N2}`,
+  };
+  const importWeek: Endpoint = {
+    method: 'post',
+    url: `/api/admin/registrations/units/${UNIT}/import?weekStart=${N2}`,
+  };
   const lists: Endpoint[] = [
     { method: 'get', url: '/api/admin/registrations/units' },
+    { method: 'get', url: '/api/admin/registrations/org-units' },
     { method: 'get', url: `/api/admin/registrations/progress?weekStart=${N2}` },
     { method: 'get', url: `/api/admin/registrations/not-registered?weekStart=${N2}` },
   ];
 
   it('a dept admin of another workshop cannot open, save or add extras for these units', async () => {
-    await expectForbidden([deptOther], [grid, save, extra]);
+    await expectForbidden([deptOther], [grid, save, extra, template, importWeek]);
   });
 
   it('employees and the system admin cannot use any registration admin endpoint', async () => {
-    await expectForbidden([a, sys], [...lists, grid, save, extra]);
+    await expectForbidden([a, sys], [...lists, grid, save, extra, template, importWeek]);
   });
 
   it('BR-27: an employee cannot view another unit’s colleagues; no meal unit, no team', async () => {

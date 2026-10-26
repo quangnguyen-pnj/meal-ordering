@@ -1,6 +1,8 @@
 'use client';
 
 import { isoWeekdayOf, type MyDayView } from '@meal/shared';
+import { CircleAlert } from 'lucide-react';
+import { DishName } from '@/components/dish-name';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { QuantityStepper } from '@/components/ui/quantity-stepper';
@@ -26,7 +28,8 @@ export function DayWindowBadge({ day }: { day: MyDayView }) {
 
 /**
  * One serving day's meals with a stepper per meal (BR-20), the forecast once taken (BR-07,
- * BR-23), meals waiting for reselection (BR-14) and desserts. Shared by /week and /today.
+ * BR-23), meals waiting for reselection (BR-14), a red note on a dish that replaced the one the
+ * employee chose after closeAt (BR-14, 2026-10-23), and desserts. Shared by /week and /today.
  */
 export function DayMeals({
   day,
@@ -55,7 +58,15 @@ export function DayMeals({
           return (
             <li key={item.menuItemId} className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-sm font-medium">{item.displayName}</p>
+                <p className="text-sm font-medium">
+                  <DishName type={item.type} displayName={item.displayName} />
+                </p>
+                {item.replacedAfterClose ? (
+                  <p className="mt-0.5 flex items-start gap-1 text-xs font-medium text-destructive">
+                    <CircleAlert className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+                    {t('week.replacedAfterClose', { from: item.replacedAfterClose.from })}
+                  </p>
+                ) : null}
                 {day.forecastTotal !== null && item.forecast !== value ? (
                   <p className="text-xs text-muted-foreground">
                     {t('week.forecast', { count: item.forecast })}

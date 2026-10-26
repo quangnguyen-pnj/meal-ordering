@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import type { DishType } from '../enums';
+import type { DishTypeLabel } from './master';
 import type { AdminDayWindow, EmployeeDayWindow } from '../rules/registration';
+import type { RegistrationImportError } from '../rules/registration-import';
 import { EmployeeCodeSchema } from './auth';
 import { DateStringSchema } from './menu';
 
@@ -52,11 +53,16 @@ export type ExtraMeal = z.infer<typeof ExtraMealSchema>;
 export interface RegistrationLineView {
   menuItemId: string;
   displayName: string;
-  type: DishType;
+  type: DishTypeLabel;
   /** Current active quantity (0 = not registered). */
   quantity: number;
   /** Quantity in the forecast snapshot; 0 when the forecast is taken but had none. */
   forecast: number;
+  /**
+   * BR-14: the HC admin replaced the dish this employee had chosen after closeAt, and the meal
+   * moved here. Shown in red on the dish (product owner, 2026-10-23).
+   */
+  replacedAfterClose: { from: string } | null;
 }
 
 export interface MyDayView {
@@ -191,7 +197,7 @@ export interface RegistrationGridView {
     date: string;
     window: AdminDayWindow;
     lockAt: string;
-    items: Array<{ id: string; displayName: string; type: DishType }>;
+    items: Array<{ id: string; displayName: string; type: DishTypeLabel }>;
   }>;
   rows: Array<{
     employeeCode: string;
@@ -211,4 +217,24 @@ export interface GridSaveResult {
 export interface SaveRegistrationResult<T> {
   view: T;
   changedDays: string[];
+}
+
+/** Result of uploading a week's registrations for a unit: a dry run (PREVIEW) or applied. */
+export interface RegistrationImportView {
+  status: 'PREVIEW' | 'APPLIED' | 'REJECTED';
+  rowCount: number;
+  errors: RegistrationImportError[];
+  /** Employee-days the file changes. */
+  changedDays: number;
+  changedEmployees: number;
+}
+
+/** An org node offered by the Khối / Trung tâm / Phòng ban filters (only nodes in scope). */
+export interface OrgFilterOption {
+  id: string;
+  name: string;
+  parentId: string | null;
+  level: number;
+  /** DMP level name, e.g. "Khối", "Trung tâm", "Phòng/Xưởng". */
+  levelName: string;
 }

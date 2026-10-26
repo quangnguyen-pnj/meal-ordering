@@ -44,7 +44,7 @@ export class MasterService {
         const rows = await this.prisma.floor.findMany({
           where: { factoryId },
           orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
-          include: { _count: { select: { orgUnits: true } } },
+          include: { _count: { select: { orgUnits: true, floorOverrideFor: true } } },
         });
         return rows.map((r) => ({
           id: r.id,
@@ -52,14 +52,14 @@ export class MasterService {
           name: r.name,
           active: r.active,
           sortOrder: r.sortOrder,
-          usageCount: r._count.orgUnits,
+          usageCount: r._count.orgUnits + r._count.floorOverrideFor,
         }));
       }
       case 'costCenter': {
         const rows = await this.prisma.costCenter.findMany({
           where: { factoryId },
           orderBy: { code: 'asc' },
-          include: { _count: { select: { orgUnits: true, employees: true } } },
+          include: { _count: { select: { orgUnits: true } } },
         });
         return rows.map((r) => ({
           id: r.id,
@@ -67,7 +67,7 @@ export class MasterService {
           name: r.name,
           active: r.active,
           source: r.source,
-          usageCount: r._count.orgUnits + r._count.employees,
+          usageCount: r._count.orgUnits,
         }));
       }
     }
@@ -182,11 +182,14 @@ export class MasterService {
         (await tx.menuWeek.count({ where: { canteenId: id, status: { not: 'CLOSED' } } }))
       );
     }
-    if (kind === 'floor') return tx.orgUnit.count({ where: { floorId: id } });
-    return (
-      (await tx.orgUnit.count({ where: { costCenterId: id } })) +
-      (await tx.employee.count({ where: { costCenterOverrideId: id } }))
-    );
+    if (kind === 'floor') {
+      return (
+        (await tx.orgUnit.count({ where: { floorId: id } })) +
+        (await tx.employee.count({ where: { floorOverrideId: id } }))
+      );
+    }
+    // Employee cost-center overrides are no longer read (cost center follows the org tree).
+    return tx.orgUnit.count({ where: { costCenterId: id } });
   }
 
   async supplier(factoryId: string) {

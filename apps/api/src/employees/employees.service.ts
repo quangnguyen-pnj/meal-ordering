@@ -9,6 +9,7 @@ import {
   describeEmployees,
   loadMasterNames,
   loadOrg,
+  orgFilterOptions,
 } from '../org/org-index';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -91,41 +92,47 @@ export class EmployeesService {
     };
   }
 
-  /** BR-63: employee-level cost-center override (null clears it). Audited (BR-64, BR-70). */
-  async setCostCenterOverride(
+  async orgUnits(scope: ListScope, factoryId: string) {
+    return orgFilterOptions(await loadOrg(this.prisma, factoryId), scope);
+  }
+
+  /**
+   * BR-63: the floor where one employee picks up their meal, when it is not their meal unit's
+   * floor (product owner, 2026-10-23); null goes back to the meal unit's floor. HC admin only
+   * (`org.manage`), with a reason, audited (BR-70). Forecast lines already taken keep the floor
+   * they were written with (BR-64); the change applies from the next snapshot.
+   */
+  async setFloorOverride(
     actorId: string,
     factoryId: string,
     employeeCode: string,
-    costCenterId: string | null,
+    floorId: string | null,
     reason: string | undefined,
   ) {
     const employee = await this.prisma.employee.findUnique({
       where: { employeeCode },
-      include: { costCenterOverride: { select: { code: true } } },
+      include: { floorOverride: { select: { code: true } } },
     });
     if (!employee) throw notFound('Employee not found');
     let code: string | null = null;
-    if (costCenterId) {
-      const cc = await this.prisma.costCenter.findUnique({ where: { id: costCenterId } });
-      if (!cc || cc.factoryId !== factoryId || !cc.active) {
-        throw invalid('Unknown or inactive cost center', [{ path: 'costCenterId', message: 'x' }]);
+    if (floorId) {
+      const floor = await this.prisma.floor.findUnique({ where: { id: floorId } });
+      if (!floor || floor.factoryId !== factoryId || !floor.active) {
+        throw invalid('Unknown or inactive floor', [{ path: 'floorId', message: 'x' }]);
       }
-      code = cc.code;
+      code = floor.code;
     }
-    if (employee.costCenterOverrideId === costCenterId) return { changed: false };
+    if (employee.floorOverrideId === floorId) return { changed: false };
     await this.prisma.$transaction(async (tx) => {
-      await tx.employee.update({
-        where: { id: employee.id },
-        data: { costCenterOverrideId: costCenterId },
-      });
+      await tx.employee.update({ where: { id: employee.id }, data: { floorOverrideId: floorId } });
       await this.audit.log(
         {
           actorId,
-          action: 'employee.costCenterOverride.set',
+          action: 'employee.floorOverride.set',
           entityType: 'Employee',
           entityId: employee.id,
-          before: { costCenterCode: employee.costCenterOverride?.code ?? null },
-          after: { costCenterCode: code },
+          before: { floorCode: employee.floorOverride?.code ?? null },
+          after: { floorCode: code },
           reason,
         },
         tx,

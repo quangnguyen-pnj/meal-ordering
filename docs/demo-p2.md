@@ -14,7 +14,7 @@ Automated proof of everything below:
 
 ```bash
 pnpm --filter @meal/shared test        # src/rules/registration.test.ts (BR-20 table, BR-22..26, BR-36)
-pnpm --filter @meal/web test           # registration-draft / grid-draft (BR-26, grid parsing)
+pnpm --filter @meal/web test           # registration-draft / grid-draft (grid parsing)
 pnpm --filter @meal/api test           # test/registration.e2e-spec.ts (the walk below, with fake time)
 ```
 
@@ -75,7 +75,7 @@ WHERE w."weekStart" = '2026-11-02' ORDER BY 1, 2, 3;
 
 ## Other P2 behaviour
 
-- **BR-26 shortcuts:** on `/week`, **Giống tuần trước** copies each weekday's types and quantities onto the first dish of that type. **Áp dụng cho cả tuần** under a day copies that day to the others by type. Missing types are listed, and nothing is saved until **Lưu đăng ký**.
+- **BR-26 shortcuts:** removed on 2026-10-23 at the product owner's request (see `decisions.md`).
 - **BR-27:** **Đơn vị của tôi** (`/team`) shows colleagues of your meal unit today: name, meals, and "Có ăn" / "Không ăn". It never shows a reason, and you can search by name or code.
 - **History:** **Lịch sử** (`/history`) shows past days with the forecast, the actual meals (cancelled ones noted) and a status, 4 weeks at a time.
 - **BR-14 at the lock:** when the HC admin removes a dish from a published menu, the employee sees a notice and a warning on the day. If they have not reselected by 08:00 that day, the `reselect-deadline` job cancels it, with an audit entry.

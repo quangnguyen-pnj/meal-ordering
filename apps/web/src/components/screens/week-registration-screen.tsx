@@ -1,8 +1,7 @@
 'use client';
 
-import { addDays, type MyRegistrationWeekView, type SaveRegistrationResult } from '@meal/shared';
+import { type MyRegistrationWeekView, type SaveRegistrationResult } from '@meal/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CopyCheck, History } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useConfirm } from '@/components/confirm-dialog';
@@ -14,29 +13,24 @@ import { WeekNav } from '@/components/week-nav';
 import { api } from '@/lib/api';
 import { apiErrorText } from '@/lib/errors';
 import {
-  applyDayToWeek,
-  applySameAsLastWeek,
   changedDates,
   dayTotal,
   draftFromDays,
-  isEditable,
   saveBody,
   setQuantity,
   type Draft,
 } from '@/lib/registration-draft';
 import { formatCloseAt, formatDate, formatVnTime } from '@/lib/utils';
-import { t, vi } from '@/messages';
+import { t } from '@/messages';
 import { DayMeals, DayWindowBadge, weekdayName } from './day-meals';
-
-type Notice = { variant: 'default' | 'warning'; lines: string[] } | null;
 
 const weekUrl = (weekStart: string | null) =>
   `/registrations/me/week${weekStart ? `?weekStart=${weekStart}` : ''}`;
 
 /**
  * /week (J1): one card per serving day with a stepper per meal and no cap (BR-20), the closeAt
- * banner (BR-03), "Same as last week" and "Apply to whole week" (BR-26). After closeAt each day
- * stays editable until its own lock and shows its difference from the forecast (BR-23).
+ * banner (BR-03). The BR-26 shortcuts were removed (product owner, 2026-10-23). After closeAt
+ * each day stays editable until its own lock and shows its difference from the forecast (BR-23).
  */
 export function WeekRegistrationScreen() {
   const qc = useQueryClient();
@@ -54,7 +48,6 @@ export function WeekRegistrationScreen() {
   const [confirm, confirmDialog] = useConfirm();
 
   const [draft, setDraft] = useState<Draft>({});
-  const [notice, setNotice] = useState<Notice>(null);
   useEffect(() => {
     setDraft(published ? draftFromDays(published.days) : {});
   }, [published]);
@@ -71,7 +64,6 @@ export function WeekRegistrationScreen() {
       ),
     onSuccess: (res) => {
       qc.setQueryData(['/registrations/me/week', weekStart], res.view);
-      setNotice(null);
       if (res.view.state === 'PUBLISHED') {
         toast.success(
           t('week.saved', { meals: res.view.totalMeals, time: formatCloseAt(res.view.closeAt) }),
@@ -80,50 +72,16 @@ export function WeekRegistrationScreen() {
     },
   });
 
-  const lastWeek = useMutation({
-    mutationFn: () => api.get<MyRegistrationWeekView>(weekUrl(addDays(published!.weekStart, -7))),
-    onSuccess: (prev) => {
-      if (prev.state !== 'PUBLISHED') {
-        setNotice({ variant: 'warning', lines: [t('week.lastWeekEmpty')] });
-        return;
-      }
-      const res = applySameAsLastWeek(draft, days, prev.days);
-      if (res.copied === 0) {
-        setNotice({ variant: 'warning', lines: [t('week.lastWeekEmpty')] });
-        return;
-      }
-      setDraft(res.draft);
-      setNotice(shortcutNotice(res.skipped));
-    },
-  });
-
-  function shortcutNotice(skipped: Array<{ date: string; type: string; quantity: number }>) {
-    return {
-      variant: skipped.length > 0 ? ('warning' as const) : ('default' as const),
-      lines: [
-        t('week.shortcutDone'),
-        ...skipped.map((s) =>
-          t('week.shortcutSkipped', {
-            weekday: weekdayName(s.date),
-            type: vi.dishTypes[s.type as keyof typeof vi.dishTypes],
-            quantity: s.quantity,
-          }),
-        ),
-      ],
-    };
-  }
-
   async function go(next: string) {
     if (
       changed.length > 0 &&
       !(await confirm({ title: t('week.leaveConfirm'), confirmLabel: t('week.discard') }))
     )
       return;
-    setNotice(null);
     setWeekStart(next);
   }
 
-  const error = query.error ?? save.error ?? lastWeek.error;
+  const error = query.error ?? save.error;
   const lockTime = days[0] ? formatVnTime(days[0].lockAt) : '';
 
   return (
@@ -168,24 +126,6 @@ export function WeekRegistrationScreen() {
               </p>
             </Alert>
 
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                disabled={lastWeek.isPending || !days.some(isEditable)}
-                onClick={() => lastWeek.mutate()}
-              >
-                <History className="h-4 w-4" aria-hidden />
-                {t('week.sameAsLastWeek')}
-              </Button>
-            </div>
-            {notice ? (
-              <Alert variant={notice.variant} role="status">
-                {notice.lines.map((l) => (
-                  <p key={l}>{l}</p>
-                ))}
-              </Alert>
-            ) : null}
-
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {days.map((day) => (
                 <section
@@ -210,20 +150,6 @@ export function WeekRegistrationScreen() {
                     <span className="text-sm font-medium">
                       {t('week.dayTotal', { count: dayTotal(draft, day.date) })}
                     </span>
-                    {isEditable(day) ? (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          const res = applyDayToWeek(draft, days, day);
-                          setDraft(res.draft);
-                          setNotice(shortcutNotice(res.skipped));
-                        }}
-                      >
-                        <CopyCheck className="h-4 w-4" aria-hidden />
-                        {t('week.applyToWeek')}
-                      </Button>
-                    ) : null}
                   </footer>
                 </section>
               ))}
@@ -240,10 +166,7 @@ export function WeekRegistrationScreen() {
                 <Button
                   variant="outline"
                   disabled={changed.length === 0 || save.isPending}
-                  onClick={() => {
-                    setDraft(draftFromDays(days));
-                    setNotice(null);
-                  }}
+                  onClick={() => setDraft(draftFromDays(days))}
                 >
                   {t('week.discard')}
                 </Button>

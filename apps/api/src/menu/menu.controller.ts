@@ -65,6 +65,17 @@ export class MenuAdminController {
     return this.menus.save(p.employeeId, p.factoryId, body);
   }
 
+  /** Saves the submitted days and publishes in one step (no separate draft save needed). */
+  @RequirePermission(...MANAGE)
+  @Post('weeks/publish')
+  @HttpCode(HttpStatus.OK)
+  saveAndPublish(
+    @Body(new ZodValidationPipe(MenuWeekSaveSchema)) body: MenuWeekSave,
+    @CurrentPrincipal() p: RequestPrincipal,
+  ) {
+    return this.menus.saveAndPublish(p.employeeId, p.factoryId, body);
+  }
+
   @RequirePermission(...MANAGE)
   @Post('weeks/:id/publish')
   @HttpCode(HttpStatus.OK)

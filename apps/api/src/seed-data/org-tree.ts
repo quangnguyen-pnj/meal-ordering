@@ -29,6 +29,26 @@ export const SEED_SUPPLIER = {
 
 export const SEED_CANTEEN = { id: 'ct_gv', code: 'CT-GV', name: 'Nhà ăn Gò Vấp' } as const;
 
+/**
+ * BR-10 / BR-13: dish types (master data since 2026-10-23). Ids follow the migration that turned
+ * the old enum into rows (`dt_<factoryId>_<code>`). The first three keep the plan's usual mix.
+ */
+export const SEED_DISH_TYPES = [
+  { code: 'MAN', name: 'Mặn', color: '#b91c1c', sortOrder: 1, minPerDay: 2, maxPerDay: 3 },
+  { code: 'CHAY', name: 'Chay', color: '#15803d', sortOrder: 2, minPerDay: 1, maxPerDay: 1 },
+  { code: 'CHAO', name: 'Cháo', color: '#b45309', sortOrder: 3, minPerDay: 1, maxPerDay: 1 },
+  {
+    code: 'EATCLEAN',
+    name: 'Eat clean',
+    color: '#0369a1',
+    sortOrder: 4,
+    minPerDay: null,
+    maxPerDay: null,
+  },
+] as const;
+export const dishTypeId = (code: string, factoryId: string = SEED_FACTORY.id) =>
+  `dt_${factoryId}_${code}`;
+
 export const SEED_FLOORS = [
   { id: 'fl_T1', code: 'T1', name: 'Tầng 1', sortOrder: 1 },
   { id: 'fl_T2', code: 'T2', name: 'Tầng 2', sortOrder: 2 },
