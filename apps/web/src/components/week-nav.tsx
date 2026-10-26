@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatWeekNumber, formatWeekRange } from '@/lib/utils';
 import { t } from '@/messages';
+import { Separator } from './ui/separator';
 
 /** Previous / next week with its ISO week number and Monday–Sunday range, and a jump back to the default week. */
 export function WeekNav({
@@ -19,8 +20,18 @@ export function WeekNav({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
+      {homeWeekStart && homeWeekStart !== weekStart ? (
+        <>
+          <Button variant="ghost" size="sm" onClick={() => onChange(homeWeekStart)}>
+            {t('menu.backToUpcoming')}
+          </Button>
+
+          <Separator orientation="vertical" className="h-5" />
+        </>
+      ) : null}
+
       <Button
-        variant="outline"
+        variant="ghost"
         size="icon"
         aria-label={t('menu.previousWeek')}
         onClick={() => onChange(addDays(weekStart, -7))}
@@ -35,18 +46,13 @@ export function WeekNav({
         <span>{formatWeekRange(weekStart)}</span>
       </p>
       <Button
-        variant="outline"
+        variant="ghost"
         size="icon"
         aria-label={t('menu.nextWeek')}
         onClick={() => onChange(addDays(weekStart, 7))}
       >
         <ChevronRight className="h-4 w-4" aria-hidden />
       </Button>
-      {homeWeekStart && homeWeekStart !== weekStart ? (
-        <Button variant="ghost" size="sm" onClick={() => onChange(homeWeekStart)}>
-          {t('menu.backToUpcoming')}
-        </Button>
-      ) : null}
     </div>
   );
 }
