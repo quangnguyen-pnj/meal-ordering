@@ -265,7 +265,7 @@ export const vi = {
     canteen: 'Nhà ăn: {canteen}',
     closeAt: 'Hạn đăng ký: đến hết {time}',
     beforeClose:
-      'Đăng ký và sửa tự do đến hết {time}. Sau đó mỗi ngày vẫn sửa được đến {lock} sáng ngày đó.',
+      'Thời hạn đăng ký đến hết {time}. Sau đó mỗi ngày vẫn sửa được đến {lock} sáng cùng ngày.',
     afterClose:
       'Đã chốt dự trù tuần. Mỗi ngày vẫn có thể thay đổi được đến {lock} sáng ngày đó; phần chênh lệch so với dự trù được ghi nhận.',
     notPublished: 'Thực đơn tuần này của {canteen} chưa được công bố.',
@@ -288,7 +288,7 @@ export const vi = {
       LOCKED: 'Đã khóa',
     },
     needsReselect:
-      'Món {dish} đã bị bỏ khỏi thực đơn ({quantity} suất). Vui lòng chọn lại trước {lock}, nếu không suất này sẽ bị hủy.',
+      'Món [ {dish} ] đã bị bỏ khỏi thực đơn. Vui lòng chọn lại trước {lock}, nếu không suất này sẽ bị hủy.',
     replacedAfterClose: 'Đã đổi món: bạn đăng ký {from}, nhà ăn thay bằng món này.',
     extra: 'Có suất bổ sung do quản trị thêm',
     increase: 'Thêm 1 suất {dish}',

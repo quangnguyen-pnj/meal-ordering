@@ -101,6 +101,7 @@ export function WeekRegistrationScreen() {
           ) : null}
         </div>
       </CardHeader>
+
       <CardContent className="flex flex-col gap-6">
         {confirmDialog}
         {error ? <Alert variant="destructive">{apiErrorText(error)}</Alert> : null}
@@ -114,7 +115,7 @@ export function WeekRegistrationScreen() {
 
         {published ? (
           <>
-            <Alert variant={published.forecastTaken ? 'default' : 'warning'}>
+            <Alert variant={'default'}>
               <p>{t('week.canteen', { canteen: published.canteenName })}</p>
               <p className="font-medium">
                 {published.forecastTaken
@@ -135,8 +136,8 @@ export function WeekRegistrationScreen() {
                   <header className="flex flex-wrap items-center justify-between gap-2">
                     <h2 className="font-medium">
                       {weekdayName(day.date)}{' '}
-                      <span className="text-sm font-normal text-muted-foreground">
-                        {formatDate(day.date)}
+                      <span className="text-xs font-normal text-muted-foreground">
+                        ( {formatDate(day.date)} )
                       </span>
                     </h2>
                     <DayWindowBadge day={day} />
