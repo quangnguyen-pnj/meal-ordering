@@ -43,7 +43,7 @@ function NavLink({
             className={cn(itemClass, 'cursor-default text-muted-foreground/70')}
           >
             {t(item.labelKey)}
-            <Badge variant="outline" className="ml-auto text-[0.75rem] font-normal">
+            <Badge variant="outline" className="ml-auto text-[0.6875rem] font-normal">
               {t('nav.comingSoon')}
             </Badge>
           </span>

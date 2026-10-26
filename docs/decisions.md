@@ -276,7 +276,9 @@ Reported: the PIN is visible in full in the browser's DevTools. The checklist th
 ## Type, colour and phone layouts (UI review, 2026-10-26)
 
 - **Font: Inter** through `next/font/google` (product owner, 2026-10-26, replacing Be Vietnam Pro). next/font downloads it at build time and serves it from the app, so browsers on the intranet never call Google, but the machine that runs `next build` needs internet access. The Latin and Vietnamese subsets are preloaded. System fonts stay as the fallback.
-- **Type scale one step up:** `text-xs` is 13px and `text-sm` is 15px (Tailwind's defaults are 12px and 14px), set once in `tailwind.config.ts` rather than per screen. The two hand-sized labels in the menu (10–11px) now use the scale.
+- **Type scale:** Tailwind's sizes, `text-xs` 12px and `text-sm` 14px. A step up (13/15px) was tried and judged too large with Inter (product owner, 2026-10-26). Page titles are 20px.
+  - Inputs are 16px on phones, so iOS does not zoom in on focus, and 14px from `md`.
+  - The Radix select (mouse only) is always 14px.
 - **Warm palette:** text is a warm near-black (`24 14% 13%`) instead of navy, to sit with the orange primary and the warm canvas. Secondary text is a warm grey (`25 8% 40%`), about 5.9:1 on white. The old blue-grey (`210 13% 62%`) was about 2.6:1, below WCAG AA.
 - **Green for "yes" states:** the `success` badge (eating, published, valid) uses a new `--success` green. It used the orange primary before, which read like a warning next to the red badges.
 - **Tabs stay on one row and scroll sideways** on narrow screens, instead of wrapping into an uneven second row. A focused tab scrolls itself fully into view.
@@ -288,9 +290,9 @@ Reported: the PIN is visible in full in the browser's DevTools. The checklist th
 
 ## Spacing for Inter (2026-10-26)
 
-Inter has a tall x-height, so at 15px the old gaps looked cramped. Spacing goes up one step, mostly in shared pieces:
+Inter has a tall x-height, so the old gaps looked cramped. Spacing goes up one step, mostly in shared pieces:
 
-- **Line height:** `text-sm` 15/24px and `text-xs` 13/20px (about 1.6).
+- **Line height:** `text-sm` 14/22px and `text-xs` 12/18px (about 1.55).
 - **Cards:** the header gap goes from 6 to 8px, and padding is 20px on phones (24px from `sm`). Nested blocks (day cards inside a card) lose less width.
 - **Sections inside a page card:** 24px apart, was 16px. Forms, dialogs and tab panels use 20px, and filter rows use 16px both ways. Tab panels sit 24px below their tabs.
 - **Tables:** header rows 48px, cells 14px top and bottom. **Alerts:** 14px top and bottom.

@@ -5,12 +5,11 @@ const config: Config = {
   content: ['./src/**/*.{ts,tsx}'],
   theme: {
     extend: {
-      // One step larger than Tailwind's defaults (12/14px): small text stays readable on a phone
-      // in the canteen and for older staff. Body copy is text-sm (15px). Line heights of about 1.6
-      // give Inter's tall lowercase and the stacked Vietnamese diacritics room to breathe.
+      // Tailwind's sizes (12/14px; body copy is text-sm) with taller lines (about 1.55): Inter's
+      // tall lowercase and the stacked Vietnamese diacritics need the room.
       fontSize: {
-        xs: ['0.8125rem', { lineHeight: '1.25rem' }],
-        sm: ['0.9375rem', { lineHeight: '1.5rem' }],
+        xs: ['0.75rem', { lineHeight: '1.125rem' }],
+        sm: ['0.875rem', { lineHeight: '1.375rem' }],
       },
       colors: {
         border: 'hsl(var(--border))',
