@@ -9,8 +9,9 @@ export const metadata: Metadata = {
   description: t('app.tagline'),
 };
 
+// `subsets` picks what is preloaded; almost every line has ầ, ố, ệ… so preload Vietnamese too.
 const inter = Inter({
-  subsets: ['latin'],
+  subsets: ['latin', 'vietnamese'],
   variable: '--font-inter',
 });
 

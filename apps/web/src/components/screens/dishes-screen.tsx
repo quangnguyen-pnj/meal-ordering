@@ -268,8 +268,8 @@ function MainDishes({ canteen }: { canteen: { id: string; name: string } }) {
   const editingType = (types.data?.items ?? []).find((x) => x.id === editing?.typeId);
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end gap-3">
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-end gap-4">
         <NameSearch id="dish-q" value={q} onChange={setQ} />
         <div className="flex w-full flex-col gap-2 sm:w-48">
           <Label htmlFor="dish-filter">{t('dishes.filterType')}</Label>
@@ -308,7 +308,7 @@ function MainDishes({ canteen }: { canteen: { id: string; name: string } }) {
       >
         {editing ? (
           <form
-            className="flex flex-col gap-4"
+            className="flex flex-col gap-5"
             onSubmit={(e) => {
               e.preventDefault();
               // One request per click, even with a double click or Enter pressed twice.
@@ -454,8 +454,8 @@ function Desserts({ canteen }: { canteen: { id: string; name: string } }) {
   const { pageItems, pagination } = usePagination(items, `${q}|${showArchived}`);
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end gap-3">
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-end gap-4">
         <NameSearch id="dessert-q" value={q} onChange={setQ} />
         <label className="flex min-h-11 items-center gap-2 text-sm">
           <Checkbox checked={showArchived} onCheckedChange={(v) => setShowArchived(v === true)} />
@@ -480,7 +480,7 @@ function Desserts({ canteen }: { canteen: { id: string; name: string } }) {
       >
         {editing ? (
           <form
-            className="flex flex-col gap-4"
+            className="flex flex-col gap-5"
             onSubmit={(e) => {
               e.preventDefault();
               if (!save.isPending) save.mutate(editing);
@@ -617,8 +617,8 @@ function DishTypes() {
     v.trim() !== '' && (!Number.isInteger(Number(v)) || Number(v) < 0 || Number(v) > 20);
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-center gap-4">
         <p className="max-w-prose text-sm text-muted-foreground">{t('dishes.types.intro')}</p>
         <Button
           className="ml-auto"
@@ -647,7 +647,7 @@ function DishTypes() {
       >
         {editing ? (
           <form
-            className="flex flex-col gap-4"
+            className="flex flex-col gap-5"
             onSubmit={(e) => {
               e.preventDefault();
               if (!save.isPending) save.mutate(editing);

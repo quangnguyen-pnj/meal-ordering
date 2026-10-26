@@ -50,7 +50,7 @@ export function QuantityStepper({
           onChange(Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0);
         }}
         className={cn(
-          'h-11 w-14 rounded-md border border-input bg-background text-center text-base tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
+          'h-11 w-12 rounded-md border border-input sm:w-14 bg-background text-center text-base tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
           value > 0 && 'border-primary font-semibold',
         )}
       />

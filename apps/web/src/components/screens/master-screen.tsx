@@ -127,7 +127,7 @@ function MasterTable({ kind }: { kind: Kind }) {
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       <div className="flex justify-end">
         <Button onClick={() => open({ id: null, code: '', name: '', sortOrder: 0 })}>
           {ADD_LABEL[kind]}
@@ -140,7 +140,7 @@ function MasterTable({ kind }: { kind: Kind }) {
       >
         {draft ? (
           <form
-            className="flex flex-col gap-4"
+            className="flex flex-col gap-5"
             onSubmit={(e) => {
               e.preventDefault();
               save.mutate(draft);

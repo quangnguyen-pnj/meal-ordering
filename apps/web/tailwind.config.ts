@@ -6,10 +6,11 @@ const config: Config = {
   theme: {
     extend: {
       // One step larger than Tailwind's defaults (12/14px): small text stays readable on a phone
-      // in the canteen and for older staff. Body copy is text-sm (15px).
+      // in the canteen and for older staff. Body copy is text-sm (15px). Line heights of about 1.6
+      // give Inter's tall lowercase and the stacked Vietnamese diacritics room to breathe.
       fontSize: {
-        xs: ['0.8125rem', { lineHeight: '1.125rem' }],
-        sm: ['0.9375rem', { lineHeight: '1.375rem' }],
+        xs: ['0.8125rem', { lineHeight: '1.25rem' }],
+        sm: ['0.9375rem', { lineHeight: '1.5rem' }],
       },
       colors: {
         border: 'hsl(var(--border))',

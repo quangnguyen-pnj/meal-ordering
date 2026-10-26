@@ -160,7 +160,7 @@ export function SettingsScreen() {
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       <Card>
         <CardHeader>
           <CardTitle>{t('settings.title')}</CardTitle>
@@ -374,7 +374,7 @@ function SupplierCard() {
       <CardContent>
         {current ? (
           <form
-            className="flex flex-wrap items-end gap-3"
+            className="flex flex-wrap items-end gap-4"
             onSubmit={(e) => {
               e.preventDefault();
               save.mutate(current);

@@ -275,7 +275,7 @@ Reported: the PIN is visible in full in the browser's DevTools. The checklist th
 
 ## Type, colour and phone layouts (UI review, 2026-10-26)
 
-- **Font: Be Vietnam Pro** (400–700), drawn for Vietnamese diacritics. It is self-hosted from `@fontsource/be-vietnam-pro` and imported in the root layout, so the intranet-only app never calls Google Fonts. System fonts stay as the fallback.
+- **Font: Inter** through `next/font/google` (product owner, 2026-10-26, replacing Be Vietnam Pro). next/font downloads it at build time and serves it from the app, so browsers on the intranet never call Google, but the machine that runs `next build` needs internet access. The Latin and Vietnamese subsets are preloaded. System fonts stay as the fallback.
 - **Type scale one step up:** `text-xs` is 13px and `text-sm` is 15px (Tailwind's defaults are 12px and 14px), set once in `tailwind.config.ts` rather than per screen. The two hand-sized labels in the menu (10–11px) now use the scale.
 - **Warm palette:** text is a warm near-black (`24 14% 13%`) instead of navy, to sit with the orange primary and the warm canvas. Secondary text is a warm grey (`25 8% 40%`), about 5.9:1 on white. The old blue-grey (`210 13% 62%`) was about 2.6:1, below WCAG AA.
 - **Green for "yes" states:** the `success` badge (eating, published, valid) uses a new `--success` green. It used the orange primary before, which read like a warning next to the red badges.
@@ -285,3 +285,15 @@ Reported: the PIN is visible in full in the browser's DevTools. The checklist th
   - Each card's ⋯ menu sits next to the name, and the label column has a fixed width.
   - On desktop the actions column has no visible header, so the table fits a 1366px screen.
 - **Đăng ký tuần** shows 3 day columns only from 1536px (`2xl`). Between 768 and 1535px it shows 2, so dish names do not wrap beside the steppers.
+
+## Spacing for Inter (2026-10-26)
+
+Inter has a tall x-height, so at 15px the old gaps looked cramped. Spacing goes up one step, mostly in shared pieces:
+
+- **Line height:** `text-sm` 15/24px and `text-xs` 13/20px (about 1.6).
+- **Cards:** the header gap goes from 6 to 8px, and padding is 20px on phones (24px from `sm`). Nested blocks (day cards inside a card) lose less width.
+- **Sections inside a page card:** 24px apart, was 16px. Forms, dialogs and tab panels use 20px, and filter rows use 16px both ways. Tab panels sit 24px below their tabs.
+- **Tables:** header rows 48px, cells 14px top and bottom. **Alerts:** 14px top and bottom.
+- **Sidebar:** 24px between groups, 4px between items, and 8px under a group title.
+- **Đăng ký tuần / Thực đơn tuần:** day blocks have 16px between rows (20px padding on desktop). Dish rows are 12px apart.
+- **Nhân viên cards on phones:** small labels sit above their values in two columns. A long label ("Đầu mối nhận cơm") no longer squeezes the value.

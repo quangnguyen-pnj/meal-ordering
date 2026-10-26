@@ -86,7 +86,7 @@ export function TodayScreen() {
           {t('today.intro')}
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      <CardContent className="flex flex-col gap-6">
         {confirmDialog}
         {query.error ? <Alert variant="destructive">{apiErrorText(query.error)}</Alert> : null}
         {save.error ? <Alert variant="destructive">{apiErrorText(save.error)}</Alert> : null}

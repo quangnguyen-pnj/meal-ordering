@@ -52,7 +52,7 @@ export function DayMeals({
           })}
         </Alert>
       ))}
-      <ul className="flex flex-col gap-2">
+      <ul className="flex flex-col gap-3">
         {day.items.map((item) => {
           const value = quantities[item.menuItemId] ?? 0;
           return (

@@ -49,7 +49,7 @@ export function HistoryScreen() {
         <CardTitle>{t('history.title')}</CardTitle>
         <CardDescription>{t('history.intro')}</CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      <CardContent className="flex flex-col gap-6">
         {query.error ? <Alert variant="destructive">{apiErrorText(query.error)}</Alert> : null}
         {data ? (
           <div className="flex flex-wrap items-center gap-2">

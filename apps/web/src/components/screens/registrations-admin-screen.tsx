@@ -78,7 +78,7 @@ export function RegistrationsAdminScreen() {
           {week ? <WeekNav weekStart={week} onChange={setWeekStart} homeWeekStart={home} /> : null}
         </div>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      <CardContent className="flex flex-col gap-6">
         {units.error ? <Alert variant="destructive">{apiErrorText(units.error)}</Alert> : null}
         {units.isLoading ? <LoadingRows rows={3} /> : null}
         {week ? (
@@ -202,7 +202,7 @@ function NotRegisteredTab({ weekStart }: { weekStart: string }) {
   ];
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="flex flex-wrap items-end gap-4">
         <div className="flex w-full flex-col gap-2 sm:w-56">
           <Label htmlFor="nr-q">{t('common.search')}</Label>
           <Input id="nr-q" type="search" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -350,9 +350,9 @@ function GridTab({ weekStart }: { weekStart: string }) {
   const editable = day?.window === 'ON_BEHALF';
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       {confirmDialog}
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="flex flex-wrap items-end gap-4">
         <UnitPicker
           id="grid-unit"
           units={units.data?.items ?? []}
@@ -558,7 +558,7 @@ function GridTab({ weekStart }: { weekStart: string }) {
           />
 
           {editable && dirty ? (
-            <div className="sticky bottom-0 z-20 -mx-6 flex flex-wrap items-center justify-between gap-3 bg-card px-6 py-3 shadow-[0_-6px_16px_-6px_rgb(41_37_36/0.12)]">
+            <div className="sticky bottom-0 z-20 -mx-5 flex flex-wrap items-center justify-between gap-3 bg-card px-5 py-3 sm:-mx-6 sm:px-6 shadow-[0_-6px_16px_-6px_rgb(41_37_36/0.12)]">
               <p className="text-sm" role="status">
                 {invalidCount > 0
                   ? t('registrations.invalidRows', { count: invalidCount })
@@ -648,7 +648,7 @@ function ExtraDialog({
     >
       <form
         id="extra-form"
-        className="flex flex-col gap-4"
+        className="flex flex-col gap-5"
         onSubmit={(e) => {
           e.preventDefault();
           if (valid) add.mutate();

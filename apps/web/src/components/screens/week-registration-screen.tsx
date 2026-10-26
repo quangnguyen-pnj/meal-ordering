@@ -101,7 +101,7 @@ export function WeekRegistrationScreen() {
           ) : null}
         </div>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      <CardContent className="flex flex-col gap-6">
         {confirmDialog}
         {error ? <Alert variant="destructive">{apiErrorText(error)}</Alert> : null}
         {query.isLoading ? <LoadingRows rows={4} /> : null}
@@ -130,7 +130,7 @@ export function WeekRegistrationScreen() {
               {days.map((day) => (
                 <section
                   key={day.date}
-                  className="flex flex-col gap-3 rounded-lg bg-card p-4 shadow-block"
+                  className="flex flex-col gap-4 rounded-lg bg-card p-4 shadow-block sm:p-5"
                 >
                   <header className="flex flex-wrap items-center justify-between gap-2">
                     <h2 className="font-medium">
@@ -155,7 +155,7 @@ export function WeekRegistrationScreen() {
               ))}
             </div>
 
-            <div className="sticky bottom-0 z-20 -mx-6 flex flex-wrap items-center justify-between gap-3 bg-card px-6 py-3 shadow-[0_-6px_16px_-6px_rgb(41_37_36/0.12)]">
+            <div className="sticky bottom-0 z-20 -mx-5 flex flex-wrap items-center justify-between gap-3 bg-card px-5 py-3 sm:-mx-6 sm:px-6 shadow-[0_-6px_16px_-6px_rgb(41_37_36/0.12)]">
               <div className="text-sm">
                 <p className="font-medium">{t('week.totalMeals', { count: total })}</p>
                 <p className="text-muted-foreground">

@@ -315,10 +315,10 @@ export function EmployeesScreen({ canManageOrg }: { canManageOrg: boolean }) {
         <CardTitle>{t('employees.title')}</CardTitle>
         <CardDescription>{t('employees.intro')}</CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      <CardContent className="flex flex-col gap-6">
         <div
           role="group"
-          className="flex flex-wrap items-end gap-3"
+          className="flex flex-wrap items-end gap-4"
           aria-label={t('employees.filters')}
         >
           <div className="flex min-w-0 flex-1 flex-col gap-2 md:w-64 md:flex-none">
@@ -390,7 +390,7 @@ export function EmployeesScreen({ canManageOrg }: { canManageOrg: boolean }) {
         ) : (
           <>
             {/* Phones: one card per employee. */}
-            <ul className="flex flex-col gap-2 md:hidden">
+            <ul className="flex flex-col gap-3 md:hidden">
               {items.map((e) => (
                 <li
                   key={e.employeeCode}
@@ -411,24 +411,32 @@ export function EmployeesScreen({ canManageOrg }: { canManageOrg: boolean }) {
                     </div>
                     <div className="-mr-2 -mt-2 shrink-0">{actions(e)}</div>
                   </div>
-                  <dl className="mt-3 grid grid-cols-[7.5rem_1fr] gap-x-3 gap-y-1.5">
-                    <dt className="text-muted-foreground">{t('org.mealUnit')}</dt>
-                    <dd>
-                      <MealUnit e={e} />
-                    </dd>
-                    <dt className="text-muted-foreground">{t('org.floor')}</dt>
-                    <dd>
-                      <Floor e={e} />
-                    </dd>
-                    <dt className="text-muted-foreground">{t('org.costCenter')}</dt>
-                    <dd>
-                      <CostCenter e={e} />
-                    </dd>
+                  {/* Small labels above values: long labels never squeeze the value column. */}
+                  <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3">
+                    {/* The "no meal unit" badge needs the whole row. */}
+                    <div className={cn(e.mealStatus !== 'OK' && 'col-span-2')}>
+                      <dt className="text-xs text-muted-foreground">{t('org.mealUnit')}</dt>
+                      <dd>
+                        <MealUnit e={e} />
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-muted-foreground">{t('org.floor')}</dt>
+                      <dd>
+                        <Floor e={e} />
+                      </dd>
+                    </div>
+                    <div className="col-span-2">
+                      <dt className="text-xs text-muted-foreground">{t('org.costCenter')}</dt>
+                      <dd>
+                        <CostCenter e={e} />
+                      </dd>
+                    </div>
                     {roleText(e) ? (
-                      <>
-                        <dt className="text-muted-foreground">{t('employees.roles')}</dt>
+                      <div className="col-span-2">
+                        <dt className="text-xs text-muted-foreground">{t('employees.roles')}</dt>
                         <dd>{roleText(e)}</dd>
-                      </>
+                      </div>
                     ) : null}
                   </dl>
                 </li>

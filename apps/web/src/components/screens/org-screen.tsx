@@ -277,8 +277,8 @@ function TreeTab() {
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_24rem]">
-      <div className="flex flex-col gap-2">
-        <div className="flex flex-wrap gap-2">
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap gap-3">
           <Input
             className="w-full sm:max-w-xs"
             type="search"
@@ -611,7 +611,7 @@ function NodeDetail({ node, idx }: { node: OrgUnitView; idx: OrgTreeIndex }) {
         </p>
       </div>
 
-      <section className="flex flex-col gap-4">
+      <section className="flex flex-col gap-5">
         <h3 className="font-medium">{t('org.mealSection')}</h3>
         <fieldset className="flex flex-col gap-1" disabled={update.isPending}>
           <legend className="mb-1 text-sm font-medium">{t('org.isMealUnitQuestion')}</legend>
@@ -651,7 +651,7 @@ function NodeDetail({ node, idx }: { node: OrgUnitView; idx: OrgTreeIndex }) {
         )}
       </section>
 
-      <section className="flex flex-col gap-4">
+      <section className="flex flex-col gap-5">
         <div className="flex flex-col gap-1">
           <h3 className="font-medium">{t('org.costSection')}</h3>
           <p className="text-xs text-muted-foreground">{t('org.costSectionHint')}</p>

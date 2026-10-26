@@ -34,7 +34,7 @@ export function PrintScreen() {
   const view = grid.data;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       <Card className="print:hidden">
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -47,9 +47,9 @@ export function PrintScreen() {
             ) : null}
           </div>
         </CardHeader>
-        <CardContent className="flex flex-col gap-4">
+        <CardContent className="flex flex-col gap-6">
           {units.error ? <Alert variant="destructive">{apiErrorText(units.error)}</Alert> : null}
-          <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-wrap items-end gap-4">
             <UnitPicker
               id="print-unit"
               units={units.data?.items ?? []}

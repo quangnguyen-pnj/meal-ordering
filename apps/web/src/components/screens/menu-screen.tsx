@@ -130,7 +130,7 @@ export function MenuScreen() {
     <Card>
       <CardHeader className="gap-4">
         <CardTitle>{t('menu.title')}</CardTitle>
-        <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-wrap items-end gap-4">
           <div className="flex w-full flex-col gap-2 sm:w-60">
             <Label htmlFor="menu-canteen">{t('menu.canteen')}</Label>
             <ResponsiveSelect
@@ -346,8 +346,8 @@ function WeekEditor({ canteenId, weekStart }: { canteenId: string; weekStart: st
         setOverId(null);
       }}
     >
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-col gap-5">
+        <div className="flex flex-wrap items-center gap-4">
           <Badge variant={statusVariant}>{vi.menu.status[view.status]}</Badge>
           <span className="text-sm">
             {view.closeAtIsExpected
@@ -416,7 +416,7 @@ function WeekEditor({ canteenId, weekStart }: { canteenId: string; weekStart: st
         {error ? <Alert variant="destructive">{apiErrorText(error)}</Alert> : null}
         {dirty ? <p className="text-sm text-muted-foreground">{t('menu.unsaved')}</p> : null}
 
-        <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-wrap items-end gap-4">
           {published ? (
             <div className="flex min-w-72 flex-1 flex-col gap-2">
               <Label htmlFor="menu-reason">{t('common.reasonOptional')}</Label>
@@ -475,7 +475,7 @@ function Library({ dishes, desserts }: { dishes: DishView[]; desserts: DessertVi
   const [q, setQ] = useState('');
   const match = (name: string) => name.toLowerCase().includes(q.trim().toLowerCase());
   return (
-    <aside className="hidden flex-col gap-3 rounded-lg bg-muted/40 p-4 lg:sticky lg:top-4 lg:flex lg:max-h-[80vh] lg:self-start lg:overflow-y-auto">
+    <aside className="hidden flex-col gap-4 rounded-lg bg-muted/40 p-5 lg:sticky lg:top-4 lg:flex lg:max-h-[80vh] lg:self-start lg:overflow-y-auto">
       <p className="font-medium">{t('menu.library')}</p>
       <p className="text-xs text-muted-foreground">{t('menu.libraryHint')}</p>
       <Input
@@ -686,7 +686,7 @@ function DayColumn({
       ref={setNodeRef}
       aria-label={`${weekday} ${formatDate(day.date)}`}
       className={cn(
-        'flex flex-col gap-3 rounded-lg bg-card p-4 shadow-block transition-[box-shadow,background-color] sm:min-h-48',
+        'flex flex-col gap-4 rounded-lg bg-card p-5 shadow-block transition-[box-shadow,background-color] sm:min-h-48',
         isOver && 'bg-accent shadow-raised ring-2 ring-primary/40',
         !day.isServing && 'bg-muted/60 shadow-none',
         locked && 'opacity-70',
@@ -816,7 +816,7 @@ function DayItem({
     <li
       ref={setNodeRef}
       className={cn(
-        'flex flex-col gap-2 rounded-md bg-muted/60 px-3 py-2 text-sm transition-[box-shadow,background-color]',
+        'flex flex-col gap-2 rounded-md bg-muted/60 px-3 py-2.5 text-sm transition-[box-shadow,background-color]',
         replaceHere && 'bg-primary/10 ring-2 ring-primary',
       )}
     >

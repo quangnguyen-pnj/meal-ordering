@@ -79,14 +79,14 @@ export function SystemScreen() {
   const error = roles.error ?? assign.error ?? revoke.error;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       <Card>
         <CardHeader>
           <CardTitle>{t('system.rolesTitle')}</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-4">
+        <CardContent className="flex flex-col gap-6">
           <form
-            className="flex flex-wrap items-end gap-3"
+            className="flex flex-wrap items-end gap-4"
             onSubmit={(e) => {
               e.preventDefault();
               if (pick) assign.mutate(pick.employeeCode);
@@ -165,7 +165,7 @@ export function SystemScreen() {
         <CardHeader>
           <CardTitle className="text-lg">{t('system.syncTitle')}</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+        <CardContent className="flex flex-col gap-5">
           {runs.error ? <Alert variant="destructive">{apiErrorText(runs.error)}</Alert> : null}
           {runs.isLoading ? <LoadingRows rows={3} /> : null}
           <Table
