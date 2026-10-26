@@ -158,7 +158,7 @@ A UI/UX pass over every P1 screen, asked for after a review. No business rule ch
 - `employeeDayWindow` (BR-22 to BR-24): `OPEN` before closeAt and the day's lock, `AFTER_CLOSE` from closeAt (or once the snapshot exists) to the lock, `LOCKED` from `day.lockTime` on day D. A late closeAt never passes a day's own lock (BR-05).
 - `adminDayWindow` (BR-21, BR-25): `ON_BEHALF` until the lock, then `EXTRA` until finalization. Finalization (DayClose) is P4, so for now the extra window also ends when day D ends (Q20).
 - `forecastLinesOf` (BR-07): the forecast is active lines with a positive quantity. Lines waiting for reselection (BR-14) are not in it (Q21).
-- `compareWithForecast` (BR-23) gives per-meal forecast, actual and difference. Screens use it to mark a day "Khác dự báo".
+- `compareWithForecast` (BR-23) gives per-meal forecast, actual and difference. Screens use it to mark a day "Khác dự trù".
 - `sameAsLastWeek` / `applyToWholeWeek` (BR-26) add up quantities by type and put them on the **first** dish of that type on the target day, as BR-26 says for "Same as last week". "Apply to whole week" uses the same rule for consistency. A type missing on the target day is reported, never invented. Nothing is saved until the user presses Save. (Removed on 2026-10-23, see below.)
 - `isLostByLeaver` (BR-36): a leaver loses meals dated on or after `endDate`, unless that day's lock has already passed. Locked days are left to reconciliation (Q23).
 - `DateStringSchema` now rejects impossible dates (`2027-02-30`), so a bad path or query date is a 400, not a 500.
