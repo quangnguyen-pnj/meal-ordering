@@ -37,7 +37,7 @@
   body {
     @apply bg-canvas text-foreground antialiased;
     font-family:
-      'Be Vietnam Pro',
+      var(--font-inter),
       system-ui,
       -apple-system,
       'Segoe UI',

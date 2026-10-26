@@ -1,24 +1,25 @@
 import type { Metadata, Viewport } from 'next';
-// Be Vietnam Pro: drawn for Vietnamese diacritics, self-hosted from node_modules (intranet only).
-import '@fontsource/be-vietnam-pro/400.css';
-import '@fontsource/be-vietnam-pro/500.css';
-import '@fontsource/be-vietnam-pro/600.css';
-import '@fontsource/be-vietnam-pro/700.css';
 import './globals.css';
 import { Providers } from './providers';
 import { t } from '@/messages';
+import { Inter } from 'next/font/google';
 
 export const metadata: Metadata = {
   title: t('app.name'),
   description: t('app.tagline'),
 };
 
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+});
+
 export const viewport: Viewport = { width: 'device-width', initialScale: 1 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="vi">
-      <body>
+      <body className={inter.variable}>
         <Providers>{children}</Providers>
       </body>
     </html>
