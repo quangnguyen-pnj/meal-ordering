@@ -464,23 +464,7 @@ function GridTab({ weekStart }: { weekStart: string }) {
         <>
           {/* Days on their own row. Then one toolbar: search and row filter (side by side, also on
               phones) and the day's window, whose entry hint opens from the info button. */}
-          <Tabs value={date} onValueChange={(d) => void pickDay(d)} className="min-w-0">
-            <TabsList aria-label={t('registrations.tabs.grid')}>
-              {view.days.map((d) => (
-                <TabsTrigger key={d.date} value={d.date} className="gap-1 px-2.5 sm:px-3">
-                  {d.window !== 'ON_BEHALF' ? (
-                    <Lock className="h-3.5 w-3.5 opacity-70" aria-hidden />
-                  ) : null}
-                  <span className="sm:hidden">{weekdayShort(d.date)}</span>
-                  <span className="hidden sm:inline">{weekdayName(d.date)}</span>
-                  <span className="tabular-nums">{formatDate(d.date).slice(0, 5)}</span>
-                  {d.window !== 'ON_BEHALF' ? (
-                    <span className="sr-only">{t('registrations.dayLocked')}</span>
-                  ) : null}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
+          <GridDayTabs days={view.days} value={date} onPick={(d) => void pickDay(d)} />
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <div className="flex w-full min-w-0 gap-2 lg:w-auto">
@@ -821,6 +805,42 @@ function GridTab({ weekStart }: { weekStart: string }) {
         </>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Day tabs of the grid. Manual activation: a tab changes the day only when clicked or on
+ * Enter/Space, not when it merely gets focus. With Radix's default (automatic), the unsaved-changes
+ * confirm reopened after "Hủy", because closing it gives focus back to the clicked tab, and that
+ * focus switched the day again.
+ */
+export function GridDayTabs({
+  days,
+  value,
+  onPick,
+}: {
+  days: RegistrationGridView['days'];
+  value: string;
+  onPick: (date: string) => void;
+}) {
+  return (
+    <Tabs value={value} onValueChange={onPick} activationMode="manual" className="min-w-0">
+      <TabsList aria-label={t('registrations.tabs.grid')}>
+        {days.map((d) => (
+          <TabsTrigger key={d.date} value={d.date} className="gap-1 px-2.5 sm:px-3">
+            {d.window !== 'ON_BEHALF' ? (
+              <Lock className="h-3.5 w-3.5 opacity-70" aria-hidden />
+            ) : null}
+            <span className="sm:hidden">{weekdayShort(d.date)}</span>
+            <span className="hidden sm:inline">{weekdayName(d.date)}</span>
+            <span className="tabular-nums">{formatDate(d.date).slice(0, 5)}</span>
+            {d.window !== 'ON_BEHALF' ? (
+              <span className="sr-only">{t('registrations.dayLocked')}</span>
+            ) : null}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </Tabs>
   );
 }
 
