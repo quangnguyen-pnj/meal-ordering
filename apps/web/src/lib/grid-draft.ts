@@ -76,3 +76,60 @@ export function columnTotals(
   }
   return totals;
 }
+
+/** Row filters of the grid toolbar, besides the name/code search. */
+export const GRID_FILTERS = ['all', 'empty', 'changed', 'errors', 'needsReselect'] as const;
+export type GridFilter = (typeof GRID_FILTERS)[number];
+
+/**
+ * Employee codes in each filter for the current values: "empty" has no meal in the cells (left
+ * out when someone has left or a cell is invalid), "changed" is what "Lưu ngày" would send,
+ * "errors" has an invalid cell or an error from the last save.
+ */
+export function gridFilterGroups(
+  view: RegistrationGridView,
+  date: string,
+  values: GridValues,
+  changes: GridChanges,
+  rowErrors: Record<string, string[]>,
+): Record<GridFilter, string[]> {
+  const day = view.days.find((d) => d.date === date);
+  const changed = new Set(changes.rows.map((r) => r.employeeCode));
+  const out: Record<GridFilter, string[]> = {
+    all: [],
+    empty: [],
+    changed: [],
+    errors: [],
+    needsReselect: [],
+  };
+  for (const row of view.rows) {
+    const code = row.employeeCode;
+    const cell = row.cells[date];
+    const invalid = !!changes.invalid[code];
+    out.all.push(code);
+    if (changed.has(code)) out.changed.push(code);
+    if (invalid || (rowErrors[code]?.length ?? 0) > 0) out.errors.push(code);
+    if ((cell?.needsReselect ?? 0) > 0) out.needsReselect.push(code);
+    const meals = (day?.items ?? []).reduce(
+      (s, i) => s + (parseCell(values[code]?.[i.id] ?? '') ?? 0),
+      0,
+    );
+    if (!cell?.blocked && !invalid && meals === 0) out.empty.push(code);
+  }
+  return out;
+}
+
+/** Lower case without Vietnamese accents, so "nguyen" finds "Nguyễn" and "dung" finds "Dũng". */
+export function searchKey(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/[đĐ]/g, 'd')
+    .toLocaleLowerCase('vi')
+    .trim();
+}
+
+/** The search box matches the name or the employee code; `term` comes from `searchKey`. */
+export function matchesGridSearch(row: { name: string; employeeCode: string }, term: string) {
+  return !term || searchKey(row.name).includes(term) || searchKey(row.employeeCode).includes(term);
+}

@@ -12,6 +12,10 @@ import { t, vi } from '@/messages';
 export const weekdayName = (date: string) =>
   vi.weekdays[isoWeekdayOf(date) as keyof typeof vi.weekdays];
 
+/** "T2" … "CN", for day tabs on phones. */
+export const weekdayShort = (date: string) =>
+  vi.weekdaysShort[isoWeekdayOf(date) as keyof typeof vi.weekdaysShort];
+
 /** Status line of a day for the employee (BR-22 to BR-24). */
 export function DayWindowBadge({ day }: { day: MyDayView }) {
   if (day.window === 'LOCKED') return <Badge variant="outline">{t('week.window.LOCKED')}</Badge>;

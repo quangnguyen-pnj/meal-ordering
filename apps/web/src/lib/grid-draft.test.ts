@@ -1,6 +1,14 @@
 import type { RegistrationGridView } from '@meal/shared';
 import { describe, expect, it } from 'vitest';
-import { columnTotals, gridChanges, gridValues, parseCell } from './grid-draft';
+import {
+  columnTotals,
+  gridChanges,
+  gridFilterGroups,
+  gridValues,
+  matchesGridSearch,
+  parseCell,
+  searchKey,
+} from './grid-draft';
 
 const DATE = '2026-11-02';
 const view: RegistrationGridView = {
@@ -80,5 +88,42 @@ describe('bulk-entry grid', () => {
       invalid: { E3: ['ca'] },
     });
     expect(columnTotals(view, DATE, values)).toEqual({ chay: 1, ca: 2 });
+  });
+
+  it('groups rows for the toolbar filters from the values being typed', () => {
+    const withFlags: typeof view = {
+      ...view,
+      rows: view.rows.map((r) =>
+        r.employeeCode === 'E3'
+          ? { ...r, cells: { [DATE]: { ...r.cells[DATE]!, blocked: true, needsReselect: 1 } } }
+          : r,
+      ),
+    };
+    const values = gridValues(withFlags, DATE);
+    values.E1!.chay = '';
+    values.E2!.ca = 'x';
+    const changes = gridChanges(withFlags, DATE, values);
+    expect(gridFilterGroups(withFlags, DATE, values, changes, {})).toEqual({
+      all: ['E1', 'E2', 'E3'],
+      // E1 was cleared; E2 has an invalid cell and E3 has left, so neither counts as empty.
+      empty: ['E1'],
+      changed: ['E1'],
+      errors: ['E2'],
+      needsReselect: ['E3'],
+    });
+    // An error from the last save marks the row too.
+    expect(
+      gridFilterGroups(withFlags, DATE, values, changes, { E1: ['vượt giới hạn'] }).errors,
+    ).toEqual(['E1', 'E2']);
+  });
+
+  it('searches names and codes without case or Vietnamese accents', () => {
+    const row = { name: 'Nguyễn Thị Đào', employeeCode: 'PNJP000123' };
+    expect(searchKey('  NGUYỄN ')).toBe('nguyen');
+    expect(matchesGridSearch(row, searchKey('nguyen thi'))).toBe(true);
+    expect(matchesGridSearch(row, searchKey('dao'))).toBe(true);
+    expect(matchesGridSearch(row, searchKey('pnjp000123'))).toBe(true);
+    expect(matchesGridSearch(row, searchKey('000124'))).toBe(false);
+    expect(matchesGridSearch(row, '')).toBe(true);
   });
 });
