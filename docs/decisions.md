@@ -300,3 +300,25 @@ Inter has a tall x-height, so the old gaps looked cramped. Spacing goes up one s
 - **Sidebar:** 24px between groups, 4px between items, and 8px under a group title.
 - **Đăng ký tuần / Thực đơn tuần:** day blocks have 16px between rows (20px padding on desktop). Dish rows are 12px apart.
 - **Nhân viên cards on phones:** small labels sit above their values in two columns. A long label ("Đầu mối nhận cơm") no longer squeezes the value.
+
+## Bulk entry grid for large units (UI review, 2026-10-27)
+
+A unit can have a few hundred people (Tổ Nhẫn: 296), so "Nhập theo bảng" was several thousand pixels tall: the dish header scrolled away and the totals sat at the very bottom.
+
+- **Still not paged** (see "Pagination of lists"): "Lưu ngày" saves the whole unit, so a page would hide changes and invalid cells that the save includes or is blocked by, Enter would stop at the end of a page, and Ctrl+F would only search one page.
+- **The grid scrolls inside a box about one screen high** (`100dvh − 11rem`, at least 22rem). Inside it the dish header (`top`), the name column (`left`) and the totals row (`bottom`) are sticky. The box is one scroll container for both axes, which is what lets the header stick: the old `overflow-x-auto` wrapper made it the sticky container without scrolling vertically. `isolate` keeps its z-indexes under the app's own sticky header. Scroll-padding and `scrollIntoView({ block: 'nearest' })` on Enter keep the focused cell clear of the sticky parts.
+- **Toolbar instead of extra rows:**
+  - Search by name or code, ignoring case and Vietnamese accents ("nguyen" finds "Nguyễn").
+  - One "Lọc dòng" select with counts: Tất cả, Chưa có suất, Đã sửa chưa lưu, Có lỗi, Cần chọn lại món. Empty filters are disabled. A select is used instead of chips so the toolbar stays on one row, also on phones.
+  - "Đang hiện n/N · Xóa lọc" only while filtering.
+  - The day's window ("Nhập thay được đến …" or the locked warning) sits at the end of the same row. The entry hint moved behind an ⓘ popover, replacing a full-width alert.
+  - Day tabs show "T2 02/11" on phones and a lock icon on days that can no longer be entered on behalf.
+- **A status filter keeps the rows it matched when it was picked** (`gridFilterGroups`, snapshotted in `GridTab`). Typing a meal into a "Chưa có suất" row, or fixing a "Có lỗi" row, does not make it vanish under the cursor. The filter is worked out again when it is picked again, on another day, after a save or a discard, and falls back to "Tất cả" when nothing matches. The save bar links to "Xem dòng lỗi" / "Xem dòng đã sửa".
+- **Totals are always the whole unit**, whatever is filtered; the totals cell says how many people that is. Row numbers stay those of the whole unit while filtering.
+- **Shorter rows (about 48px on desktop):**
+  - The row number moved into the name column, hidden on phones so more dish columns fit.
+  - Badges sit on the code line.
+  - An invalid cell is shown by its red border and a tooltip, no longer by an extra line of text.
+  - "Thêm suất bổ sung" is a "+" icon button.
+  - Cells are 36px high from `md` (44px on touch screens).
+- **No table library.** TanStack Table would bring sorting, filtering and paging models, but the hard parts here are sticky layout, keyboard entry and dirty tracking, which it does not provide. A grid component (AG Grid, Glide) would not match the shadcn styling or the Vietnamese copy file. The unit sizes in the seed (up to about 300 people × 5–6 dishes) render without virtualisation. If typing ever feels slow, memoise the rows first; virtualisation (`@tanstack/react-virtual`) would break Ctrl+F and the Enter navigation, which looks cells up in the DOM.
