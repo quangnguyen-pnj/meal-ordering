@@ -6,7 +6,7 @@ import { DishName } from '@/components/dish-name';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { QuantityStepper } from '@/components/ui/quantity-stepper';
-import { formatDate, formatVnTime } from '@/lib/utils';
+import { formatDate, formatVnDateTime, formatVnTime } from '@/lib/utils';
 import { t, vi } from '@/messages';
 
 export const weekdayName = (date: string) =>
@@ -48,11 +48,12 @@ export function DayMeals({
           {t('week.needsReselect', {
             dish: n.displayName,
             quantity: n.quantity,
-            lock: formatVnTime(day.lockAt),
+            lock: formatVnDateTime(day.lockAt),
           })}
         </Alert>
       ))}
-      <ul className="flex flex-col gap-2">
+
+      <ul className="flex flex-col gap-3">
         {day.items.map((item) => {
           const value = quantities[item.menuItemId] ?? 0;
           return (
@@ -61,20 +62,23 @@ export function DayMeals({
                 <p className="text-sm font-medium">
                   <DishName type={item.type} displayName={item.displayName} />
                 </p>
+
                 {item.replacedAfterClose ? (
                   <p className="mt-0.5 flex items-start gap-1 text-xs font-medium text-destructive">
                     <CircleAlert className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
                     {t('week.replacedAfterClose', { from: item.replacedAfterClose.from })}
                   </p>
                 ) : null}
-                {day.forecastTotal !== null && item.forecast !== value ? (
+
+                {/* {day.forecastTotal !== null && item.forecast !== value ? (
                   <p className="text-xs text-muted-foreground">
                     {t('week.forecast', { count: item.forecast })}
                   </p>
-                ) : null}
+                ) : null} */}
               </div>
+
               {locked ? (
-                <span className="w-14 text-center text-base font-semibold tabular-nums">
+                <span className="!w-14 text-center text-base font-medium tabular-nums">
                   {value}
                 </span>
               ) : (
@@ -90,6 +94,7 @@ export function DayMeals({
           );
         })}
       </ul>
+
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <span>
           {day.desserts.length > 0
@@ -99,7 +104,7 @@ export function DayMeals({
         {day.forecastTotal !== null ? (
           <span>· {t('week.forecast', { count: day.forecastTotal })}</span>
         ) : null}
-        {day.changed ? <Badge variant="warning">{t('week.changed')}</Badge> : null}
+        {/* {day.changed ? <Badge variant="warning">{t('week.changed')}</Badge> : null} */}
         {day.extra ? <Badge variant="secondary">{t('week.extra')}</Badge> : null}
       </div>
     </div>

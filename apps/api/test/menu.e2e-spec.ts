@@ -626,10 +626,22 @@ describe('BR-10: Excel import of a canteen library', () => {
       .expect(200);
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(res.body as ArrayBuffer);
-    expect(wb.worksheets[0]!.getRow(1).getCell(1).text).toBe(HEADER[0]);
+    const library = wb.worksheets[0]!;
+    expect(library.getRow(1).getCell(1).text).toBe(HEADER[0]);
     const codes: string[] = [];
     wb.worksheets[1]!.eachRow((row, n) => n > 1 && codes.push(row.getCell(1).text));
     expect(codes).toEqual(expect.arrayContaining(['MAN', 'CHAY', 'CHAO']));
+    for (const rowNumber of [2, 2001]) {
+      const row = library.getRow(rowNumber);
+      expect(row.getCell(1).dataValidation).toMatchObject({
+        type: 'list',
+        formulae: ['"Món chính,Tráng miệng"'],
+      });
+      expect(row.getCell(2).dataValidation).toMatchObject({
+        type: 'list',
+        formulae: [`'Loại món'!$A$2:$A$${codes.length + 1}`],
+      });
+    }
   });
 
   it('BR-10: previews, then adds only what the library does not have yet', async () => {

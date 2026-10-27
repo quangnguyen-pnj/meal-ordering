@@ -88,7 +88,7 @@ export function ChangePinForm({ forced }: { forced: boolean }) {
       method="post"
       noValidate
       onSubmit={form.handleSubmit((v) => change.mutate(v))}
-      className="flex flex-col gap-4"
+      className="flex flex-col gap-5"
     >
       <p className="text-sm text-muted-foreground">
         {forced ? t('changePin.forcedIntro') : t('changePin.intro')}

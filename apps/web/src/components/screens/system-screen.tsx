@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useConfirm } from '@/components/confirm-dialog';
 import { Label } from '@/components/ui/label';
+import { Pagination } from '@/components/ui/pagination';
 import { LoadingRows } from '@/components/ui/skeleton';
 import {
   Table,
@@ -20,6 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { usePagination } from '@/hooks/use-pagination';
 import { api } from '@/lib/api';
 import { apiErrorText } from '@/lib/errors';
 import { formatVnDateTime } from '@/lib/utils';
@@ -58,6 +60,7 @@ export function SystemScreen() {
     queryKey: ['/system/sync-runs'],
     queryFn: () => api.get<{ items: SyncRunRow[] }>('/system/sync-runs'),
   });
+  const runPage = usePagination(runs.data?.items ?? []);
   const assign = useMutation({
     mutationFn: (employeeCode: string) => api.post('/system/roles', { employeeCode, role }),
     onSuccess: () => {
@@ -76,14 +79,14 @@ export function SystemScreen() {
   const error = roles.error ?? assign.error ?? revoke.error;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       <Card>
         <CardHeader>
           <CardTitle>{t('system.rolesTitle')}</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-4">
+        <CardContent className="flex flex-col gap-6">
           <form
-            className="flex flex-wrap items-end gap-3"
+            className="flex flex-wrap items-end gap-4"
             onSubmit={(e) => {
               e.preventDefault();
               if (pick) assign.mutate(pick.employeeCode);
@@ -162,7 +165,7 @@ export function SystemScreen() {
         <CardHeader>
           <CardTitle className="text-lg">{t('system.syncTitle')}</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-5">
           {runs.error ? <Alert variant="destructive">{apiErrorText(runs.error)}</Alert> : null}
           {runs.isLoading ? <LoadingRows rows={3} /> : null}
           <Table
@@ -179,7 +182,7 @@ export function SystemScreen() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(runs.data?.items ?? []).map((r) => (
+              {runPage.pageItems.map((r) => (
                 <TableRow key={r.id}>
                   <TableCell>{formatVnDateTime(r.startedAt)}</TableCell>
                   <TableCell>{vi.system.syncType[r.type]}</TableCell>
@@ -211,6 +214,7 @@ export function SystemScreen() {
               ) : null}
             </TableBody>
           </Table>
+          <Pagination {...runPage.pagination} />
         </CardContent>
       </Card>
     </div>

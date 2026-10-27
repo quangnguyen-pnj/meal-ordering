@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Pagination } from '@/components/ui/pagination';
 import { LoadingRows } from '@/components/ui/skeleton';
 import {
   Table,
@@ -17,6 +18,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { useDebounced } from '@/hooks/use-debounced';
+import { usePagination } from '@/hooks/use-pagination';
 import { ApiError, api } from '@/lib/api';
 import { apiErrorText } from '@/lib/errors';
 import { formatDate } from '@/lib/utils';
@@ -28,15 +31,17 @@ import { t } from '@/messages';
  */
 export function TeamScreen() {
   const [q, setQ] = useState('');
+  const term = useDebounced(q.trim());
   const query = useQuery({
-    queryKey: ['/team', q.trim()],
-    queryFn: () =>
-      api.get<TeamDayView>(`/team${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`),
+    queryKey: ['/team', term],
+    queryFn: () => api.get<TeamDayView>(`/team${term ? `?q=${encodeURIComponent(term)}` : ''}`),
+    placeholderData: (prev) => prev,
   });
   const data = query.data;
   const eating = data?.members.filter((m) => m.eating).length ?? 0;
   const meals =
     data?.members.reduce((s, m) => s + m.meals.reduce((x, y) => x + y.quantity, 0), 0) ?? 0;
+  const { pageItems, pagination } = usePagination(data?.members ?? [], term);
 
   return (
     <Card>
@@ -44,7 +49,7 @@ export function TeamScreen() {
         <CardTitle>{t('team.title')}</CardTitle>
         <CardDescription>{t('team.intro')}</CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      <CardContent className="flex flex-col gap-6">
         <div className="flex w-full flex-col gap-2 sm:w-72">
           <Label htmlFor="team-q">{t('common.search')}</Label>
           <Input id="team-q" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -67,34 +72,37 @@ export function TeamScreen() {
             {data.members.length === 0 ? (
               <p className="text-sm text-muted-foreground">{t('team.empty')}</p>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t('common.name')}</TableHead>
-                    <TableHead>{t('team.meals')}</TableHead>
-                    <TableHead>{t('team.status')}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.members.map((m) => (
-                    <TableRow key={m.key}>
-                      <TableCell className="font-medium">{m.name}</TableCell>
-                      <TableCell>
-                        {m.meals.length === 0
-                          ? t('common.none')
-                          : m.meals
-                              .map((meal) => `${meal.quantity} × ${meal.displayName}`)
-                              .join(', ')}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={m.eating ? 'success' : 'outline'}>
-                          {m.eating ? t('team.eating') : t('team.notEating')}
-                        </Badge>
-                      </TableCell>
+              <div className="flex flex-col gap-3">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{t('common.name')}</TableHead>
+                      <TableHead>{t('team.meals')}</TableHead>
+                      <TableHead>{t('team.status')}</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {pageItems.map((m) => (
+                      <TableRow key={m.key}>
+                        <TableCell className="font-medium">{m.name}</TableCell>
+                        <TableCell>
+                          {m.meals.length === 0
+                            ? t('common.none')
+                            : m.meals
+                                .map((meal) => `${meal.quantity} × ${meal.displayName}`)
+                                .join(', ')}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={m.eating ? 'success' : 'outline'}>
+                            {m.eating ? t('team.eating') : t('team.notEating')}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <Pagination {...pagination} />
+              </div>
             )}
           </>
         ) : null}

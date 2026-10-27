@@ -43,7 +43,7 @@ function NavLink({
             className={cn(itemClass, 'cursor-default text-muted-foreground/70')}
           >
             {t(item.labelKey)}
-            <Badge variant="outline" className="ml-auto text-[0.65rem] font-normal">
+            <Badge variant="outline" className="ml-auto text-[0.6875rem] font-normal">
               {t('nav.comingSoon')}
             </Badge>
           </span>
@@ -118,13 +118,13 @@ export function AppShell({
   }
 
   const navigation = (
-    <nav aria-label={t('nav.label')} className="flex flex-col gap-4 px-2 py-4 md:pt-0">
+    <nav aria-label={t('nav.label')} className="flex flex-col gap-6 px-2 py-4 md:pt-0">
       {groups.map((group) => (
         <div key={group.key}>
-          <p className="px-3 pb-1 text-[0.6875rem] font-bold uppercase tracking-wide text-muted-foreground">
+          <p className="px-3 pb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
             {group.title}
           </p>
-          <ul className="flex flex-col gap-0.5 font-medium">
+          <ul className="flex flex-col gap-1 font-medium">
             {group.items.map((item) => (
               <li key={item.href}>
                 <NavLink

@@ -10,7 +10,7 @@ import {
   type RegistrationProgressView,
 } from '@meal/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FileSpreadsheet } from 'lucide-react';
+import { FolderInput } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { AppDialog } from '@/components/app-dialog';
@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Pagination } from '@/components/ui/pagination';
 import { LoadingRows } from '@/components/ui/skeleton';
 import {
   Table,
@@ -36,6 +37,8 @@ import {
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { WeekNav } from '@/components/week-nav';
+import { useDebounced } from '@/hooks/use-debounced';
+import { usePagination } from '@/hooks/use-pagination';
 import { ApiError, api } from '@/lib/api';
 import { apiErrorText } from '@/lib/errors';
 import { columnTotals, gridChanges, gridValues, type GridValues } from '@/lib/grid-draft';
@@ -75,7 +78,7 @@ export function RegistrationsAdminScreen() {
           {week ? <WeekNav weekStart={week} onChange={setWeekStart} homeWeekStart={home} /> : null}
         </div>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      <CardContent className="flex flex-col gap-6">
         {units.error ? <Alert variant="destructive">{apiErrorText(units.error)}</Alert> : null}
         {units.isLoading ? <LoadingRows rows={3} /> : null}
         {week ? (
@@ -109,56 +112,62 @@ function ProgressTab({ weekStart }: { weekStart: string }) {
     queryFn: () =>
       api.get<RegistrationProgressView>(`/admin/registrations/progress?weekStart=${weekStart}`),
   });
+  const { pageItems, pagination } = usePagination(query.data?.units ?? [], weekStart);
   if (query.error) return <Alert variant="destructive">{apiErrorText(query.error)}</Alert>;
   if (!query.data) return <LoadingRows />;
   if (query.data.units.length === 0) {
     return <p className="text-sm text-muted-foreground">{t('registrations.noUnits')}</p>;
   }
   return (
-    <Table className="min-w-[36rem]">
-      <TableHeader>
-        <TableRow>
-          <TableHead>{t('registrations.mealUnit')}</TableHead>
-          <TableHead className="text-right">{t('registrations.headcount')}</TableHead>
-          <TableHead className="text-right">{t('registrations.registered')}</TableHead>
-          <TableHead className="text-right">{t('registrations.notRegistered')}</TableHead>
-          <TableHead className="text-right">{t('registrations.meals')}</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {query.data.units.map((u) => {
-          const pct = u.headcount > 0 ? Math.round((u.registered / u.headcount) * 100) : 0;
-          return (
-            <TableRow key={u.mealUnitId}>
-              <TableCell>
-                <p className="font-medium">{u.name}</p>
-                <p className="text-xs text-muted-foreground">{u.pathName}</p>
-                {!u.published ? (
-                  <Badge variant="warning" className="mt-1">
-                    {t('registrations.notPublished')}
-                  </Badge>
-                ) : null}
-              </TableCell>
-              <TableCell className="text-right tabular-nums">{u.headcount}</TableCell>
-              <TableCell className="text-right tabular-nums">
-                {u.registered}{' '}
-                <span className="text-xs text-muted-foreground">
-                  {t('registrations.progressPct', { pct })}
-                </span>
-              </TableCell>
-              <TableCell className="text-right tabular-nums">{u.notRegistered}</TableCell>
-              <TableCell className="text-right tabular-nums">{u.meals}</TableCell>
-            </TableRow>
-          );
-        })}
-      </TableBody>
-    </Table>
+    <div className="flex flex-col gap-3">
+      <Table className="min-w-[36rem]">
+        <TableHeader>
+          <TableRow>
+            <TableHead>{t('registrations.mealUnit')}</TableHead>
+            <TableHead className="text-right">{t('registrations.headcount')}</TableHead>
+            <TableHead className="text-right">{t('registrations.registered')}</TableHead>
+            <TableHead className="text-right">{t('registrations.notRegistered')}</TableHead>
+            <TableHead className="text-right">{t('registrations.meals')}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {pageItems.map((u) => {
+            const pct = u.headcount > 0 ? Math.round((u.registered / u.headcount) * 100) : 0;
+            return (
+              <TableRow key={u.mealUnitId}>
+                <TableCell>
+                  <p className="font-medium">{u.name}</p>
+                  <p className="text-xs text-muted-foreground">{u.pathName}</p>
+                  {!u.published ? (
+                    <Badge variant="warning" className="mt-1">
+                      {t('registrations.notPublished')}
+                    </Badge>
+                  ) : null}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">{u.headcount}</TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {u.registered}{' '}
+                  <span className="text-xs text-muted-foreground">
+                    {t('registrations.progressPct', { pct })}
+                  </span>
+                </TableCell>
+                <TableCell className="text-right tabular-nums">{u.notRegistered}</TableCell>
+                <TableCell className="text-right tabular-nums">{u.meals}</TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+      <Pagination {...pagination} />
+    </div>
   );
 }
 
 function NotRegisteredTab({ weekStart }: { weekStart: string }) {
   const [date, setDate] = useState('');
   const [orgUnitId, setOrgUnitId] = useState('');
+  const [q, setQ] = useState('');
+  const term = useDebounced(q.trim().toLocaleLowerCase('vi'), 200);
   const query = useQuery({
     queryKey: ['/admin/registrations/not-registered', weekStart, date, orgUnitId],
     queryFn: () => {
@@ -168,6 +177,17 @@ function NotRegisteredTab({ weekStart }: { weekStart: string }) {
       return api.get<NotRegisteredView>(`/admin/registrations/not-registered?${q}`);
     },
   });
+  // Searched here: the API returns the whole list for the week, day and org filter.
+  const matches = (query.data?.items ?? []).filter(
+    (e) =>
+      !term ||
+      e.employeeCode.toLocaleLowerCase('vi').includes(term) ||
+      e.name.toLocaleLowerCase('vi').includes(term),
+  );
+  const { pageItems, pagination } = usePagination(
+    matches,
+    `${weekStart}|${date}|${orgUnitId}|${term}`,
+  );
   // Khối / Trung tâm / Phòng ban filter, within the caller's scope.
   const orgUnits = useQuery({
     queryKey: ['/admin/registrations/org-units'],
@@ -182,7 +202,11 @@ function NotRegisteredTab({ weekStart }: { weekStart: string }) {
   ];
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="flex flex-wrap items-end gap-4">
+        <div className="flex w-full flex-col gap-2 sm:w-56">
+          <Label htmlFor="nr-q">{t('common.search')}</Label>
+          <Input id="nr-q" type="search" value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
         <div className="flex w-full flex-col gap-2 sm:w-56">
           <Label htmlFor="nr-day">{t('history.date')}</Label>
           <ResponsiveSelect id="nr-day" value={date} onValueChange={setDate} options={options} />
@@ -202,26 +226,45 @@ function NotRegisteredTab({ weekStart }: { weekStart: string }) {
       {query.data && query.data.total > 0 ? (
         <>
           <p className="text-sm">{t('registrations.listTotal', { count: query.data.total })}</p>
-          <Table className="min-w-[36rem]">
+          <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>{t('common.code')}</TableHead>
                 <TableHead>{t('common.name')}</TableHead>
-                <TableHead>{t('registrations.unit')}</TableHead>
-                <TableHead>{t('registrations.mealUnit')}</TableHead>
+                <TableHead className="hidden md:table-cell">{t('registrations.unit')}</TableHead>
+                <TableHead className="hidden sm:table-cell">
+                  {t('registrations.mealUnit')}
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {query.data.items.map((e) => (
+              {pageItems.map((e) => (
                 <TableRow key={e.employeeCode}>
                   <TableCell className="tabular-nums">{e.employeeCode}</TableCell>
-                  <TableCell className="font-medium">{e.name}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{e.orgPath}</TableCell>
-                  <TableCell>{e.mealUnitName}</TableCell>
+                  <TableCell>
+                    <p className="font-medium">{e.name}</p>
+                    {/* Narrow screens: the unit columns fold under the name. */}
+                    <p className="text-xs text-muted-foreground md:hidden">
+                      <span className="sm:hidden">{e.mealUnitName} · </span>
+                      {e.orgPath}
+                    </p>
+                  </TableCell>
+                  <TableCell className="hidden text-sm text-muted-foreground md:table-cell">
+                    {e.orgPath}
+                  </TableCell>
+                  <TableCell className="hidden sm:table-cell">{e.mealUnitName}</TableCell>
                 </TableRow>
               ))}
+              {matches.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-muted-foreground">
+                    {t('registrations.noMatch')}
+                  </TableCell>
+                </TableRow>
+              ) : null}
             </TableBody>
           </Table>
+          <Pagination {...pagination} />
         </>
       ) : null}
     </div>
@@ -307,9 +350,9 @@ function GridTab({ weekStart }: { weekStart: string }) {
   const editable = day?.window === 'ON_BEHALF';
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       {confirmDialog}
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="flex flex-wrap items-end gap-4">
         <UnitPicker
           id="grid-unit"
           units={units.data?.items ?? []}
@@ -323,11 +366,12 @@ function GridTab({ weekStart }: { weekStart: string }) {
         <CanteenPicker id="grid-canteen" grid={view} onChange={setCanteenId} />
         {view?.state === 'PUBLISHED' && view.days.some((d) => d.window === 'ON_BEHALF') ? (
           <Button variant="outline" className="ml-auto" onClick={() => setImportOpen(true)}>
-            <FileSpreadsheet className="h-4 w-4" aria-hidden />
+            <FolderInput className="h-5 w-5 text-primary" aria-hidden />
             {t('registrations.import.open')}
           </Button>
         ) : null}
       </div>
+
       {view?.state === 'PUBLISHED' ? (
         <WeekImport
           open={importOpen}
@@ -341,6 +385,7 @@ function GridTab({ weekStart }: { weekStart: string }) {
           }}
         />
       ) : null}
+
       {grid.error ? <Alert variant="destructive">{apiErrorText(grid.error)}</Alert> : null}
       {grid.isLoading ? <LoadingRows /> : null}
       {view?.state === 'NOT_PUBLISHED' ? (
@@ -380,20 +425,22 @@ function GridTab({ weekStart }: { weekStart: string }) {
           <Table>
             <TableHeader className="bg-muted">
               <TableRow className="hover:bg-transparent">
+                <TableHead>#</TableHead>
                 <TableHead className="sticky left-0 z-10 bg-muted px-2">
                   {t('registrations.employee')}
                 </TableHead>
                 {day.items.map((i) => (
                   <TableHead
                     key={i.id}
-                    className="min-w-20 whitespace-normal px-2 text-center normal-case tracking-normal"
+                    className="min-w-20 max-w-28 whitespace-normal px-2 text-center normal-case tracking-normal"
                   >
                     <DishName type={i.type} displayName={i.displayName} />
                   </TableHead>
                 ))}
-                <TableHead className="px-2 text-right">{t('registrations.total')}</TableHead>
+                <TableHead className="px-2 text-center">{t('registrations.total')}</TableHead>
               </TableRow>
             </TableHeader>
+
             <TableBody>
               {view.rows.map((row, r) => {
                 const cell = row.cells[date]!;
@@ -412,6 +459,7 @@ function GridTab({ weekStart }: { weekStart: string }) {
                     key={row.employeeCode}
                     className={cn('hover:bg-transparent', hasError && 'bg-destructive/5')}
                   >
+                    <TableCell>{r + 1}</TableCell>
                     <TableCell
                       className={cn(
                         'sticky left-0 z-10 min-w-36 bg-card px-2 py-1.5',
@@ -478,24 +526,26 @@ function GridTab({ weekStart }: { weekStart: string }) {
                         />
                       </TableCell>
                     ))}
-                    <TableCell className="px-2 text-right font-medium tabular-nums">
+                    <TableCell className="px-2 text-center font-medium tabular-nums">
                       {rowTotal}
                     </TableCell>
                   </TableRow>
                 );
               })}
             </TableBody>
+
             <tfoot className="bg-muted/60 font-semibold">
               <tr>
                 <td className="sticky left-0 z-10 bg-muted px-2 py-3">
                   {t('registrations.total')}
                 </td>
+                <td></td>
                 {day.items.map((i) => (
                   <td key={i.id} className="px-2 py-3 text-center tabular-nums">
                     {totals[i.id] ?? 0}
                   </td>
                 ))}
-                <td className="px-2 py-3 text-right tabular-nums">
+                <td className="px-2 py-3 text-center tabular-nums">
                   {Object.values(totals).reduce((s, n) => s + n, 0)}
                 </td>
               </tr>
@@ -515,7 +565,7 @@ function GridTab({ weekStart }: { weekStart: string }) {
           />
 
           {editable && dirty ? (
-            <div className="sticky bottom-0 z-20 -mx-6 flex flex-wrap items-center justify-between gap-3 bg-card px-6 py-3 shadow-[0_-6px_16px_-6px_rgb(41_37_36/0.12)]">
+            <div className="sticky bottom-0 z-20 -mx-5 flex flex-wrap items-center justify-between gap-3 bg-card px-5 py-3 sm:-mx-6 sm:px-6 shadow-[0_-6px_16px_-6px_rgb(41_37_36/0.12)]">
               <p className="text-sm" role="status">
                 {invalidCount > 0
                   ? t('registrations.invalidRows', { count: invalidCount })
@@ -605,7 +655,7 @@ function ExtraDialog({
     >
       <form
         id="extra-form"
-        className="flex flex-col gap-4"
+        className="flex flex-col gap-5"
         onSubmit={(e) => {
           e.preventDefault();
           if (valid) add.mutate();

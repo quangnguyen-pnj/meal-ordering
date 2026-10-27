@@ -44,7 +44,7 @@ The same file also covers a missed job: the first request after week N+1's close
 1. Sign in as `PNJP000004` and set fake time to a Tuesday a week before the target week. Use the `/api/dev/clock` PUT from demo-p0 section 3, for example `{"at":"2026-10-27T10:00:00+07:00"}`, so the target week starts Monday 2026-11-02.
 2. As `PNJP000003`, build and publish next week's menu (demo-p1 section 2).
 3. As `PNJP000001`, open **Đăng ký tuần** (`/week`). The coming week is preselected. The yellow banner says "Đăng ký và sửa tự do đến hết 29/10/2026 23:59…". Use the + / − steppers (no cap: 3 of one dish is fine), then **Lưu đăng ký**. The message confirms the week's meal count and the deadline.
-4. Set the clock to Thursday 23:59 and change a day: accepted. Set it to Friday 00:01. Within a minute the `close-week` job takes the snapshot, or the next page load does. The banner turns grey: "Đã chốt dự báo tuần…". Each day shows "Còn sửa được đến 08:00 …", and a day you change shows "Dự báo: n suất" and the badge **Khác dự báo**.
+4. Set the clock to Thursday 23:59 and change a day: accepted. Set it to Friday 00:01. Within a minute the `close-week` job takes the snapshot, or the next page load does. The banner turns grey: "Đã chốt dự trù tuần…". Each day shows "Còn sửa được đến 08:00 …", and a day you change shows "Dự trù: n suất" and the badge **Khác dự trù**.
 5. As a colleague who registered nothing (any other employee of Nhóm Nhẫn 1), set the clock to Monday 07:59 and register on **Hôm nay** (`/today`). The page counts down to 08:00. At 08:00 the steppers disappear and the page says to contact the dept admin.
 
 ## 2. The bulk grid saves 50 employees × 5 days

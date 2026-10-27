@@ -100,7 +100,7 @@ export function ExcelImportDialog<R extends ImportOutcome>({
         </>
       }
     >
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-5">
         <div>
           <Button variant="outline" disabled={download.isPending} onClick={() => download.mutate()}>
             <Download className="h-4 w-4" aria-hidden />

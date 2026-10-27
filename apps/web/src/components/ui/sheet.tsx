@@ -54,7 +54,7 @@ const SheetContent = React.forwardRef<
       {children}
       <SheetPrimitive.Close className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring">
         <X className="h-5 w-5" />
-        <span className="sr-only">{t('common.closeMenu')}</span>
+        <span className="sr-only">{t('common.close')}</span>
       </SheetPrimitive.Close>
     </SheetPrimitive.Content>
   </SheetPortal>

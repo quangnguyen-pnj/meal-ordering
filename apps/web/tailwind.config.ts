@@ -5,6 +5,12 @@ const config: Config = {
   content: ['./src/**/*.{ts,tsx}'],
   theme: {
     extend: {
+      // Tailwind's sizes (12/14px; body copy is text-sm) with taller lines (about 1.55): Inter's
+      // tall lowercase and the stacked Vietnamese diacritics need the room.
+      fontSize: {
+        xs: ['0.75rem', { lineHeight: '1.125rem' }],
+        sm: ['0.875rem', { lineHeight: '1.375rem' }],
+      },
       colors: {
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
@@ -23,6 +29,7 @@ const config: Config = {
           foreground: 'hsl(var(--destructive-foreground))',
         },
         warning: { DEFAULT: 'hsl(var(--warning))', foreground: 'hsl(var(--warning-foreground))' },
+        success: { DEFAULT: 'hsl(var(--success))', foreground: 'hsl(var(--success-foreground))' },
         card: { DEFAULT: 'hsl(var(--card))', foreground: 'hsl(var(--card-foreground))' },
         canvas: 'hsl(var(--canvas))',
         popover: {

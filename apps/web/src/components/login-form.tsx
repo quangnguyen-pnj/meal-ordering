@@ -72,7 +72,7 @@ export function LoginForm() {
         method="post"
         noValidate
         onSubmit={form.handleSubmit((values) => login.mutate(values))}
-        className="flex flex-col gap-4"
+        className="flex flex-col gap-5"
       >
         <div className="flex flex-col gap-2">
           <Label htmlFor="employeeCode">{t('login.employeeCode')}</Label>

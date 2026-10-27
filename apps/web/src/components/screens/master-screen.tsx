@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { AppDialog } from '@/components/app-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Pagination } from '@/components/ui/pagination';
 import { LoadingRows } from '@/components/ui/skeleton';
 import {
   Table,
@@ -21,6 +22,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { usePagination } from '@/hooks/use-pagination';
 import { api } from '@/lib/api';
 import { apiErrorText } from '@/lib/errors';
 import { t, vi } from '@/messages';
@@ -86,6 +88,7 @@ function MasterTable({ kind }: { kind: Kind }) {
     queryFn: () => api.get<{ items: MasterItemView[] }>(path),
   });
   const [draft, setDraft] = useState<Draft | null>(null);
+  const { pageItems, pagination } = usePagination(list.data?.items ?? []);
   const isFloor = kind === 'floors';
   const refresh = () => void qc.invalidateQueries({ queryKey: [path] });
 
@@ -124,7 +127,7 @@ function MasterTable({ kind }: { kind: Kind }) {
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       <div className="flex justify-end">
         <Button onClick={() => open({ id: null, code: '', name: '', sortOrder: 0 })}>
           {ADD_LABEL[kind]}
@@ -137,7 +140,7 @@ function MasterTable({ kind }: { kind: Kind }) {
       >
         {draft ? (
           <form
-            className="flex flex-col gap-4"
+            className="flex flex-col gap-5"
             onSubmit={(e) => {
               e.preventDefault();
               save.mutate(draft);
@@ -207,7 +210,7 @@ function MasterTable({ kind }: { kind: Kind }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {(list.data?.items ?? []).map((item) => (
+          {pageItems.map((item) => (
             <TableRow key={item.id} className={item.active ? undefined : 'text-muted-foreground'}>
               <TableCell className="font-mono">{item.code}</TableCell>
               <TableCell>{item.name}</TableCell>
@@ -253,6 +256,7 @@ function MasterTable({ kind }: { kind: Kind }) {
           ) : null}
         </TableBody>
       </Table>
+      <Pagination {...pagination} />
     </div>
   );
 }

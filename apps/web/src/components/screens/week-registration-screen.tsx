@@ -101,7 +101,8 @@ export function WeekRegistrationScreen() {
           ) : null}
         </div>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+
+      <CardContent className="flex flex-col gap-6">
         {confirmDialog}
         {error ? <Alert variant="destructive">{apiErrorText(error)}</Alert> : null}
         {query.isLoading ? <LoadingRows rows={4} /> : null}
@@ -114,7 +115,7 @@ export function WeekRegistrationScreen() {
 
         {published ? (
           <>
-            <Alert variant={published.forecastTaken ? 'default' : 'warning'}>
+            <Alert variant={'default'}>
               <p>{t('week.canteen', { canteen: published.canteenName })}</p>
               <p className="font-medium">
                 {published.forecastTaken
@@ -126,17 +127,17 @@ export function WeekRegistrationScreen() {
               </p>
             </Alert>
 
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
               {days.map((day) => (
                 <section
                   key={day.date}
-                  className="flex flex-col gap-3 rounded-lg bg-card p-4 shadow-block"
+                  className="flex flex-col gap-4 rounded-lg bg-card p-4 shadow-block sm:p-5"
                 >
                   <header className="flex flex-wrap items-center justify-between gap-2">
                     <h2 className="font-medium">
                       {weekdayName(day.date)}{' '}
-                      <span className="text-sm font-normal text-muted-foreground">
-                        {formatDate(day.date)}
+                      <span className="text-xs font-normal text-muted-foreground">
+                        ( {formatDate(day.date)} )
                       </span>
                     </h2>
                     <DayWindowBadge day={day} />
@@ -155,7 +156,7 @@ export function WeekRegistrationScreen() {
               ))}
             </div>
 
-            <div className="sticky bottom-0 z-20 -mx-6 flex flex-wrap items-center justify-between gap-3 bg-card px-6 py-3 shadow-[0_-6px_16px_-6px_rgb(41_37_36/0.12)]">
+            <div className="sticky bottom-0 z-20 -mx-5 flex flex-wrap items-center justify-between gap-3 bg-card px-5 py-3 sm:-mx-6 sm:px-6 shadow-[0_-6px_16px_-6px_rgb(41_37_36/0.12)]">
               <div className="text-sm">
                 <p className="font-medium">{t('week.totalMeals', { count: total })}</p>
                 <p className="text-muted-foreground">

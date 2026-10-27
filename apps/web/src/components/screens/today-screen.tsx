@@ -86,7 +86,8 @@ export function TodayScreen() {
           {t('today.intro')}
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+
+      <CardContent className="flex flex-col gap-6">
         {confirmDialog}
         {query.error ? <Alert variant="destructive">{apiErrorText(query.error)}</Alert> : null}
         {save.error ? <Alert variant="destructive">{apiErrorText(save.error)}</Alert> : null}
@@ -117,11 +118,7 @@ export function TodayScreen() {
               </div>
             </dl>
 
-            {locked ? (
-              <Alert variant="warning">
-                {t('today.lockedHint', { lock: formatVnTime(day.lockAt) })}
-              </Alert>
-            ) : left !== null ? (
+            {!locked && left !== null ? (
               <Alert role="timer">
                 {t('today.countdown', {
                   left: formatMinutes(left),

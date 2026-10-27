@@ -158,7 +158,7 @@ A UI/UX pass over every P1 screen, asked for after a review. No business rule ch
 - `employeeDayWindow` (BR-22 to BR-24): `OPEN` before closeAt and the day's lock, `AFTER_CLOSE` from closeAt (or once the snapshot exists) to the lock, `LOCKED` from `day.lockTime` on day D. A late closeAt never passes a day's own lock (BR-05).
 - `adminDayWindow` (BR-21, BR-25): `ON_BEHALF` until the lock, then `EXTRA` until finalization. Finalization (DayClose) is P4, so for now the extra window also ends when day D ends (Q20).
 - `forecastLinesOf` (BR-07): the forecast is active lines with a positive quantity. Lines waiting for reselection (BR-14) are not in it (Q21).
-- `compareWithForecast` (BR-23) gives per-meal forecast, actual and difference. Screens use it to mark a day "Khác dự báo".
+- `compareWithForecast` (BR-23) gives per-meal forecast, actual and difference. Screens use it to mark a day "Khác dự trù".
 - `sameAsLastWeek` / `applyToWholeWeek` (BR-26) add up quantities by type and put them on the **first** dish of that type on the target day, as BR-26 says for "Same as last week". "Apply to whole week" uses the same rule for consistency. A type missing on the target day is reported, never invented. Nothing is saved until the user presses Save. (Removed on 2026-10-23, see below.)
 - `isLostByLeaver` (BR-36): a leaver loses meals dated on or after `endDate`, unless that day's lock has already passed. Locked days are left to reconciliation (Q23).
 - `DateStringSchema` now rejects impossible dates (`2027-02-30`), so a bad path or query date is a 400, not a 500.
@@ -249,6 +249,7 @@ A list of fixes and features from the product owner, with the answers to the que
 ### Excel imports
 
 - **Dish library:** template download, then upload with `apply=false` (preview) or `apply=true`. A row is "Món chính" with a dish-type code, or "Tráng miệng". One bad row rejects the file; rows already in the library are skipped, so the same file twice adds nothing. Applied in one transaction with one audit entry (`dishLibrary.imported`).
+  - The template's "Nhóm" and "Mã loại món" cells are Excel drop-downs on rows 2–2001 (the import limit). "Nhóm" lists the two groups; "Mã loại món" points at the codes on the "Loại món" sheet and accepts blank (desserts have no type). This only helps the user; the server still validates every row, because the drop-down can be bypassed by pasting or by other spreadsheet apps.
 - **A unit's week of registrations** (the product owner's meaning of "danh sách đăng ký suất ăn"): the template is the bulk grid as a file (row 1 for people, hidden row 2 with `<date>|<menuItemId>` keys, current quantities filled in), only days still open for on-behalf entry. Upload validates the whole file (`validateRegistrationImport`); applying saves every changed day through the grid's own save, now able to take several days in one transaction (`saveGridDays`), so BR-20, BR-21 and the per-day audit apply unchanged. Same scope as the grid (`registration.onBehalf` on the unit).
 
 ### Removed
@@ -264,3 +265,38 @@ Reported: the PIN is visible in full in the browser's DevTools. The checklist th
 - **Added: no caching of API answers.** `Cache-Control: no-store`, `X-Content-Type-Options: nosniff` and `Referrer-Policy: same-origin` on every `/api` response, and no `X-Powered-By`. The web app sends `X-Frame-Options: DENY` and `frame-ancestors 'none'`.
 - **Checked, no leak found:** every read endpoint, called as each of the four roles, returns no PIN hash, token hash or secret; a rejected sign-in does not echo the PIN; the session token is only in the httpOnly cookie. `apps/api/test/security.e2e-spec.ts` keeps this checked.
 - **Not changed: the PIN in the sign-in request body.** DevTools shows the request before TLS encrypts it, so only someone already at that browser sees it. Hashing the PIN in the browser would not help: the hash becomes the password, and a 6-digit PIN can be brute-forced from any captured hash. HTTPS protects it in transit, and the server stores only an argon2id hash.
+
+## Pagination of lists (UI review, 2026-10-26)
+
+- **One `Pagination` component (`components/ui/pagination.tsx`), 25 rows per page everywhere.** It shows "1–25 / 746", Trước / Sau, and page numbers with gaps from `sm` up ("Trang 2/30" on phones). It hides for a single page, and scrolls the list back into view when its top has gone above the screen.
+- **Client-side paging (`usePagination`) for lists the API returns whole:** Đơn vị của tôi, Tiến độ and Chưa đăng ký, Thư viện món (main dishes and desserts), Danh mục, the org meal-unit list, the unassigned and missing-cost-center lists, the mapping import preview and errors, and sync runs. A factory has about 1,700 employees, so these answers stay small; the cost was rendering, not transfer (Chưa đăng ký was 746 rows, 37,000 px tall on a desktop and 67,000 px on a phone). Search or filter changes go back to page 1.
+- **Nhân viên keeps server-side paging** (`limit`/`offset`), now 25 instead of 50 per page and with the same component.
+- **Not paged, on purpose:** the bulk entry grid (Enter/Tab move through every row and a day saves as one batch), the print sheet, the org tree, the menu builder's library (scrolls inside its panel, with search) and the Excel import dialog (its error list scrolls).
+- **Added with it:** a name/code search on Chưa đăng ký and a name search on the dish library (both filter the loaded list), and the team search now waits 300 ms before calling the API instead of calling it on every key. On phones Chưa đăng ký folds the unit columns under the name, so the table no longer scrolls sideways.
+
+## Type, colour and phone layouts (UI review, 2026-10-26)
+
+- **Font: Inter** through `next/font/google` (product owner, 2026-10-26, replacing Be Vietnam Pro). next/font downloads it at build time and serves it from the app, so browsers on the intranet never call Google, but the machine that runs `next build` needs internet access. The Latin and Vietnamese subsets are preloaded. System fonts stay as the fallback.
+- **Type scale:** Tailwind's sizes, `text-xs` 12px and `text-sm` 14px. A step up (13/15px) was tried and judged too large with Inter (product owner, 2026-10-26). Page titles are 20px.
+  - Inputs are 16px on phones, so iOS does not zoom in on focus, and 14px from `md`.
+  - The Radix select (mouse only) is always 14px.
+- **Warm palette:** text is a warm near-black (`24 14% 13%`) instead of navy, to sit with the orange primary and the warm canvas. Secondary text is a warm grey (`25 8% 40%`), about 5.9:1 on white. The old blue-grey (`210 13% 62%`) was about 2.6:1, below WCAG AA.
+- **Green for "yes" states:** the `success` badge (eating, published, valid) uses a new `--success` green. It used the orange primary before, which read like a warning next to the red badges.
+- **Tabs stay on one row and scroll sideways** on narrow screens, instead of wrapping into an uneven second row. A focused tab scrolls itself fully into view.
+- **Nhân viên on phones:**
+  - Only the search box shows. The other filters open in a bottom sheet from a "Bộ lọc" button, which shows how many filters are on; the sheet has "Xóa bộ lọc" and "Xem n người".
+  - Each card's ⋯ menu sits next to the name, and the label column has a fixed width.
+  - On desktop the actions column has no visible header, so the table fits a 1366px screen.
+- **Đăng ký tuần** shows 3 day columns only from 1536px (`2xl`). Between 768 and 1535px it shows 2, so dish names do not wrap beside the steppers.
+
+## Spacing for Inter (2026-10-26)
+
+Inter has a tall x-height, so the old gaps looked cramped. Spacing goes up one step, mostly in shared pieces:
+
+- **Line height:** `text-sm` 14/22px and `text-xs` 12/18px (about 1.55).
+- **Cards:** the header gap goes from 6 to 8px, and padding is 20px on phones (24px from `sm`). Nested blocks (day cards inside a card) lose less width.
+- **Sections inside a page card:** 24px apart, was 16px. Forms, dialogs and tab panels use 20px, and filter rows use 16px both ways. Tab panels sit 24px below their tabs.
+- **Tables:** header rows 48px, cells 14px top and bottom. **Alerts:** 14px top and bottom.
+- **Sidebar:** 24px between groups, 4px between items, and 8px under a group title.
+- **Đăng ký tuần / Thực đơn tuần:** day blocks have 16px between rows (20px padding on desktop). Dish rows are 12px apart.
+- **Nhân viên cards on phones:** small labels sit above their values in two columns. A long label ("Đầu mối nhận cơm") no longer squeezes the value.
