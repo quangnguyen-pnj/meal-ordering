@@ -282,7 +282,20 @@ export const vi = {
     dayTotal: '{count} suất',
     totalMeals: 'Tổng cả tuần: {count} suất',
     forecast: 'Đã dự trù: {count} suất',
+    itemForecast: 'Dự trù: {count}',
     changed: 'Khác dự trù',
+    tabs: {
+      label: 'Dự trù và thực tế',
+      forecast: 'Dự trù tuần',
+      actual: 'Thực tế',
+    },
+    forecastTable: {
+      intro: 'Số suất đã chốt lúc {time}, chỉ để xem. Thay đổi từng ngày ở tab Thực tế.',
+      dish: 'Món',
+      total: 'Tổng',
+      other: 'Món đã đổi hoặc bỏ khỏi thực đơn',
+      empty: 'Bạn không dự trù suất nào trong tuần này.',
+    },
     window: {
       AFTER_CLOSE: 'Còn sửa được đến {lock}',
       LOCKED: 'Đã khóa',
