@@ -53,7 +53,7 @@ Automated: `menu.e2e-spec.ts` "employees see their canteen's published menu". It
 
 ## 4. A mapping import with one bad row is rejected with row-level errors and applies nothing
 
-1. **Cơ cấu tổ chức** (`/admin/org`) → tab **Nhập / xuất Excel** → **Tải xuống**. You get `mapping-to-chuc.xlsx`, which is the import template filled with today's mapping. The second sheet lists valid codes.
+1. **Đơn vị nhận cơm** (`/admin/org`) → tab **Nhập / xuất Excel** → **Tải xuống**. You get `mapping-to-chuc.xlsx`, which is the import template filled with today's mapping. The second sheet lists valid codes.
 2. In Excel, change one floor code to `T2` (valid) and another to `T9` (does not exist). Save.
 3. **Chọn tệp .xlsx** → **Kiểm tra tệp**. Result: "Tệp bị từ chối: 1 lỗi. Không có thay đổi nào được áp dụng." and a table with the row number, column, value and reason. The tree is unchanged.
 4. Fix the bad row and upload again: a preview lists each change (before → after) and nothing is applied until **Áp dụng tất cả**. Every changed node is audited with the file name and row.
