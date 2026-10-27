@@ -10,7 +10,7 @@ import {
   type RegistrationProgressView,
 } from '@meal/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FileSpreadsheet } from 'lucide-react';
+import { FolderInput } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { AppDialog } from '@/components/app-dialog';
@@ -366,7 +366,7 @@ function GridTab({ weekStart }: { weekStart: string }) {
         <CanteenPicker id="grid-canteen" grid={view} onChange={setCanteenId} />
         {view?.state === 'PUBLISHED' && view.days.some((d) => d.window === 'ON_BEHALF') ? (
           <Button variant="outline" className="ml-auto" onClick={() => setImportOpen(true)}>
-            <FileSpreadsheet className="h-4 w-4" aria-hidden />
+            <FolderInput className="h-5 w-5 text-primary" aria-hidden />
             {t('registrations.import.open')}
           </Button>
         ) : null}

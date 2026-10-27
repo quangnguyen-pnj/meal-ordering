@@ -7,7 +7,7 @@ import {
   type LibraryImportView,
 } from '@meal/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FileSpreadsheet } from 'lucide-react';
+import { FolderInput } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { DishName, DishTypeTag } from '@/components/dish-name';
@@ -142,9 +142,10 @@ function LibraryImport({ canteen }: { canteen: { id: string; name: string } }) {
   return (
     <>
       <Button variant="outline" onClick={() => setOpen(true)}>
-        <FileSpreadsheet className="h-4 w-4" aria-hidden />
+        <FolderInput className="h-4 w-4" aria-hidden />
         {t('dishes.import.open')}
       </Button>
+
       <ExcelImportDialog<LibraryImportView>
         open={open}
         onClose={() => setOpen(false)}
