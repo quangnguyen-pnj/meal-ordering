@@ -121,6 +121,10 @@ export const vi = {
     menuNotPublished:
       'Thực đơn tuần bắt đầu {weekStart} của {canteen} chưa được công bố. Nhân viên chưa thể đăng ký.',
     dismiss: 'Đã xem',
+    dismissAll: 'Đã xem tất cả',
+    summary: 'Bạn có {count} thông báo mới về thay đổi thực đơn.',
+    expand: 'Xem chi tiết',
+    collapse: 'Thu gọn',
     openMenu: 'Mở Thực đơn tuần',
     reselect: 'Chọn lại món',
     lockTimeFallback: 'giờ khóa',

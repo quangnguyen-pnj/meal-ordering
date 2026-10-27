@@ -54,6 +54,7 @@ import { Label } from '@/components/ui/label';
 import { LoadingRows } from '@/components/ui/skeleton';
 import { WeekNav } from '@/components/week-nav';
 import { api } from '@/lib/api';
+import { BANNERS_KEY } from '@/lib/banners';
 import { apiErrorText } from '@/lib/errors';
 import {
   createMenuBuilderStore,
@@ -250,6 +251,8 @@ function WeekEditor({ canteenId, weekStart }: { canteenId: string; weekStart: st
       qc.setQueryData(weekKey, res.menu);
       store.getState().load(res.menu);
       setReason('');
+      // The admin may have a meal on a changed dish too (BR-14).
+      void qc.invalidateQueries({ queryKey: BANNERS_KEY });
       toast.success(
         published
           ? t('menu.effects', {
@@ -272,6 +275,8 @@ function WeekEditor({ canteenId, weekStart }: { canteenId: string; weekStart: st
     onSuccess: (res) => {
       qc.setQueryData(weekKey, res);
       store.getState().load(res);
+      // The "menu not published" banner (BR-06) goes away now, not on the next reload.
+      void qc.invalidateQueries({ queryKey: BANNERS_KEY });
       toast.success(t('menu.published'));
     },
   });

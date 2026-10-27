@@ -3,6 +3,17 @@ import type { Banner } from '@/components/app-shell/banner-area';
 import { formatDate } from '@/lib/utils';
 import { t, vi } from '@/messages';
 
+/**
+ * React Query key of the caller's banners (GET /me/banners). The user id is part of it, so a
+ * sign-in as someone else in the same tab never shows the previous person's notices.
+ */
+export const bannersKey = (userId: string) => [...BANNERS_KEY, userId] as const;
+/** Prefix of every user's banners key, to refetch them after a change that may add a notice. */
+export const BANNERS_KEY = ['/me/banners'] as const;
+
+/** How often an open page checks for new notices (BR-14), on top of navigation and focus. */
+export const BANNERS_REFRESH_MS = 60_000;
+
 const asDate = (v: unknown) =>
   typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? formatDate(v) : String(v ?? '');
 

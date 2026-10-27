@@ -310,3 +310,12 @@ A display change only: one registration per employee-day as before, and the fore
   - **Dự trù tuần** is read-only: one table of the snapshot, a row per dish with a forecast (a dish served on several days shares a row by display name), a column per serving day and totals. Forecast on a dish replaced or removed after the snapshot (BR-14) is not among the day's items; it goes on a "Món đã đổi hoặc bỏ khỏi thực đơn" row, so the day totals still match the snapshot (`forecastGrid`).
   - **Thực tế** holds the day cards, editable until each day's lock (BR-23, BR-24). Each dish shows "Dự trù: n" and, when it differs, the difference "(+1)". This brings back the per-dish forecast line hidden on 2026-10-26, on this tab only; `/today` is unchanged.
 - The draft lives above the tabs, so switching tabs keeps unsaved changes. The save bar shows only on the tab with the steppers.
+
+## Thông báo thay đổi thực đơn hiện ngay, gộp gọn (2026-10-27)
+
+Bug report: after an admin replaced a dish in Thực đơn tuần, the employee saw no notice; it appeared only later, together with the next one (removed dish). The API wrote each notice at once (BR-14, `menu.e2e-spec.ts`). The web read them only in the `(app)` layout on the server, and Next.js does not render a shared layout again on client navigation, so the list stayed as it was at the last full page load.
+
+- **Banners are now a React Query list** (`GET /me/banners`), seeded from the server render. They are refetched on each page change, when the window regains focus, and every 60 s while the page is open. Dismissing a notice updates the list in place instead of `router.refresh()`.
+- **After the HC admin saves or publishes a menu** the banner list is refetched, so the "menu not published" warning (BR-06) goes away at once. The HC admin's own notices also show at once.
+- **Several notices fold into one box:** "Bạn có n thông báo mới về thay đổi thực đơn." with "Xem chi tiết" (a compact list, each item with "Đã xem"), "Đã xem tất cả", and "Chọn lại món" while one of them is a removed dish. A single notice is shown in full, as before. The box is amber when a dish has to be reselected (BR-14), grey otherwise. A notice that needs action comes first. System warnings (BR-06) stay as separate alerts.
+- **Per user:** the banners key holds the user id, and a PIN sign-in drops the client query cache (it was kept before, so on a shared machine the next person could briefly see the previous person's cached week), so the next person to sign in in the same tab never sees the previous person's data.
