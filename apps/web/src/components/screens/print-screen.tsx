@@ -54,6 +54,7 @@ export function PrintScreen() {
               id="print-unit"
               units={units.data?.items ?? []}
               value={unitId}
+              canteenId={view?.canteenId ?? null}
               onChange={(id) => {
                 setUnitId(id);
                 setCanteenId('');

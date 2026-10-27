@@ -214,6 +214,7 @@ describe('P2 exit criterion: the bulk grid saves 50 employees × 5 days', () => 
     const units = await dept.get('/api/admin/registrations/units').expect(200);
     const team = units.body.items.find((u: { id: string }) => u.id === UNIT);
     expect(team.employeeCount).toBeGreaterThanOrEqual(53);
+    expect(team.canteenCounts).toEqual({ ct_gv: team.employeeCount });
     // Nothing outside Xưởng Chế tác is offered.
     expect(units.body.items.some((u: { id: string }) => u.id === 'ou_XKH')).toBe(false);
 

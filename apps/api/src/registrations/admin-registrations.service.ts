@@ -66,9 +66,14 @@ export class AdminRegistrationsService {
       await this.store.employees(this.prisma, factoryId, employeeScopeWhere(scope), org)
     ).filter(registrable);
     const counts = new Map<string, number>();
+    const byCanteen = new Map<string, Record<string, number>>();
     for (const e of employees) {
+      const canteenId = e.assignment.canteenId;
       for (const id of org.byId.get(e.orgUnitId)?.path.split('/').filter(Boolean) ?? []) {
         counts.set(id, (counts.get(id) ?? 0) + 1);
+        const c = byCanteen.get(id) ?? {};
+        c[canteenId] = (c[canteenId] ?? 0) + 1;
+        byCanteen.set(id, c);
       }
     }
     const inScope = (path: string) =>
@@ -82,6 +87,7 @@ export class AdminRegistrationsService {
         level: n.level,
         isMealUnit: n.isMealUnit,
         employeeCount: counts.get(n.id) ?? 0,
+        canteenCounts: byCanteen.get(n.id) ?? {},
       }))
       .sort((a, b) => a.pathName.localeCompare(b.pathName, 'vi'));
   }

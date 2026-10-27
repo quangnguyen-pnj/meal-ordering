@@ -148,8 +148,13 @@ export interface RegistrationUnitOption {
   pathName: string;
   level: number;
   isMealUnit: boolean;
-  /** Employees below this node who can register (BR-60, BR-63). */
+  /** Employees below this node who can register (BR-60, BR-63), all canteens together. */
   employeeCount: number;
+  /**
+   * The same employees by canteen id. The grid and the forms show one canteen at a time, so the
+   * picker shows the count of the canteen on screen, not `employeeCount`.
+   */
+  canteenCounts: Record<string, number>;
 }
 
 export interface RegistrationProgressView {

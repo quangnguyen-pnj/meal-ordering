@@ -33,15 +33,27 @@ export function useRegistrationGrid(unitId: string, weekStart: string | null, ca
   });
 }
 
+/**
+ * How many rows the grid shows for a unit: the employees of one canteen, the one on screen for
+ * the picked unit, else the most common one (the grid's default), not the unit's total.
+ */
+export function unitRowCount(unit: RegistrationUnitOption, canteenId: string | null): number {
+  if (canteenId) return unit.canteenCounts[canteenId] ?? 0;
+  return Math.max(0, ...Object.values(unit.canteenCounts));
+}
+
 export function UnitPicker({
   id,
   units,
   value,
+  canteenId,
   onChange,
 }: {
   id: string;
   units: readonly RegistrationUnitOption[];
   value: string;
+  /** The canteen of the grid on screen for `value`. */
+  canteenId: string | null;
   onChange: (id: string) => void;
 }) {
   return (
@@ -54,7 +66,10 @@ export function UnitPicker({
         placeholder={t('registrations.chooseUnit')}
         options={units.map((u) => ({
           value: u.id,
-          label: t('registrations.unitOption', { path: u.pathName, count: u.employeeCount }),
+          label: t('registrations.unitOption', {
+            path: u.pathName,
+            count: unitRowCount(u, u.id === value ? canteenId : null),
+          }),
         }))}
       />
     </div>
