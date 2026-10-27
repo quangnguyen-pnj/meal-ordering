@@ -104,7 +104,7 @@ export const vi = {
       delivery: 'Giao nhận',
       reports: 'Báo cáo',
       master: 'Nhà ăn, tầng, trung tâm chi phí',
-      org: 'Cơ cấu tổ chức',
+      org: 'Đơn vị nhận cơm',
       employees: 'Nhân viên',
       settings: 'Cài đặt',
       audit: 'Nhật ký hoạt động',
@@ -474,9 +474,9 @@ export const vi = {
     codeHint: 'Chữ, số, dấu chấm, gạch ngang. Không đổi được sau khi tạo.',
   },
   org: {
-    title: 'Cơ cấu tổ chức',
+    title: 'Đơn vị nhận cơm',
     intro:
-      'Cây tổ chức 6 cấp lấy từ DMP. Chọn đầu mối nhận cơm, gán tầng, nhà ăn, trung tâm chi phí và quản trị bộ phận.',
+      'Chọn đơn vị nào là đầu mối nhận cơm, nhận tại tầng và nhà ăn nào; gán trung tâm chi phí và quản trị bộ phận cho từng đơn vị. Cây đơn vị 6 cấp lấy từ DMP.',
     tabs: {
       tree: 'Cây tổ chức',
       unassigned: 'Chưa đăng ký cơm được',
