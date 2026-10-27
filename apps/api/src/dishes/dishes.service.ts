@@ -33,6 +33,37 @@ export const LIBRARY_TEMPLATE_HEADER = [
   'Tên món',
 ] as const;
 const MAX_IMPORT_ROWS = 2_000;
+const LIBRARY_KIND_LABELS = { main: 'Món chính', dessert: 'Tráng miệng' } as const;
+const DISH_TYPE_SHEET = 'Loại món';
+
+/**
+ * Turns the "Nhóm" and "Mã loại món" cells of every importable row into drop-down lists, so the
+ * user picks a value instead of typing it. The type codes come from the second sheet (codes from
+ * row 2 down). A blank type code stays allowed because desserts have none.
+ */
+function addLibraryDropdowns(sheet: ExcelJS.Worksheet, dishTypeCount: number): void {
+  const kindList: ExcelJS.DataValidation = {
+    type: 'list',
+    allowBlank: true,
+    formulae: [`"${Object.values(LIBRARY_KIND_LABELS).join(',')}"`],
+    showErrorMessage: true,
+    errorTitle: 'Nhóm không hợp lệ',
+    error: 'Chọn "Món chính" hoặc "Tráng miệng" trong danh sách.',
+  };
+  const typeCodeList: ExcelJS.DataValidation = {
+    type: 'list',
+    allowBlank: true,
+    formulae: [`'${DISH_TYPE_SHEET}'!$A$2:$A$${dishTypeCount + 1}`],
+    showErrorMessage: true,
+    errorTitle: 'Mã loại món không hợp lệ',
+    error: `Chọn một mã trong danh sách (xem sheet "${DISH_TYPE_SHEET}"). Món tráng miệng để trống.`,
+  };
+  for (let rowNumber = 2; rowNumber <= MAX_IMPORT_ROWS + 1; rowNumber += 1) {
+    const row = sheet.getRow(rowNumber);
+    row.getCell(1).dataValidation = kindList;
+    if (dishTypeCount > 0) row.getCell(2).dataValidation = typeCodeList;
+  }
+}
 
 const cellText = (row: ExcelJS.Row, col: number): string => row.getCell(col).text?.trim() ?? '';
 
@@ -321,16 +352,20 @@ export class DishesService {
     });
     const wb = new ExcelJS.Workbook();
     const sheet = wb.addWorksheet('Thư viện món');
+
     sheet.addRow([...LIBRARY_TEMPLATE_HEADER]);
     sheet.getRow(1).font = { bold: true };
     sheet.columns.forEach((c, i) => (c.width = [30, 24, 48][i]));
+
     const example = types[0];
-    if (example) sheet.addRow(['Món chính', example.code, 'Ví dụ: Cá kho tộ']);
-    sheet.addRow(['Tráng miệng', '', 'Ví dụ: Chuối']);
-    const lists = wb.addWorksheet('Loại món');
+    if (example) sheet.addRow([LIBRARY_KIND_LABELS.main, example.code, 'Ví dụ: Cá kho tộ']);
+    sheet.addRow([LIBRARY_KIND_LABELS.dessert, '', 'Ví dụ: Chuối']);
+
+    const lists = wb.addWorksheet(DISH_TYPE_SHEET);
     lists.addRow(['Mã loại món', 'Tên']);
     lists.getRow(1).font = { bold: true };
     for (const t of types) lists.addRow([t.code, t.name]);
+    addLibraryDropdowns(sheet, types.length);
     return Buffer.from(await wb.xlsx.writeBuffer());
   }
 

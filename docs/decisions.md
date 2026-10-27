@@ -249,6 +249,7 @@ A list of fixes and features from the product owner, with the answers to the que
 ### Excel imports
 
 - **Dish library:** template download, then upload with `apply=false` (preview) or `apply=true`. A row is "Món chính" with a dish-type code, or "Tráng miệng". One bad row rejects the file; rows already in the library are skipped, so the same file twice adds nothing. Applied in one transaction with one audit entry (`dishLibrary.imported`).
+  - The template's "Nhóm" and "Mã loại món" cells are Excel drop-downs on rows 2–2001 (the import limit). "Nhóm" lists the two groups; "Mã loại món" points at the codes on the "Loại món" sheet and accepts blank (desserts have no type). This only helps the user; the server still validates every row, because the drop-down can be bypassed by pasting or by other spreadsheet apps.
 - **A unit's week of registrations** (the product owner's meaning of "danh sách đăng ký suất ăn"): the template is the bulk grid as a file (row 1 for people, hidden row 2 with `<date>|<menuItemId>` keys, current quantities filled in), only days still open for on-behalf entry. Upload validates the whole file (`validateRegistrationImport`); applying saves every changed day through the grid's own save, now able to take several days in one transaction (`saveGridDays`), so BR-20, BR-21 and the per-day audit apply unchanged. Same scope as the grid (`registration.onBehalf` on the unit).
 
 ### Removed
