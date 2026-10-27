@@ -366,10 +366,11 @@ export const vi = {
       template: 'Tải tệp mẫu',
       file: 'Tệp .xlsx',
       check: 'Kiểm tra tệp',
-      apply: 'Lưu {days} ngày-người',
-      preview: '{employees} người, {days} ngày-người sẽ thay đổi.',
+      apply: 'Lưu {days} thay đổi',
+      preview:
+        'Sẽ thay đổi đăng ký của {employees} người, tổng {days} lượt (mỗi người mỗi ngày tính 1 lượt).',
       nothing: 'Tệp không thay đổi gì so với hiện tại.',
-      applied: 'Đã lưu: {employees} người, {days} ngày-người thay đổi.',
+      applied: 'Đã lưu thay đổi đăng ký của {employees} người, tổng {days} lượt.',
       rejected: 'Tệp có {count} lỗi, chưa lưu gì:',
       rowError: 'Dòng {row}: {error} ({value})',
       errors: {
