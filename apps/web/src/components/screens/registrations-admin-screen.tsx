@@ -371,6 +371,7 @@ function GridTab({ weekStart }: { weekStart: string }) {
           </Button>
         ) : null}
       </div>
+
       {view?.state === 'PUBLISHED' ? (
         <WeekImport
           open={importOpen}
@@ -384,6 +385,7 @@ function GridTab({ weekStart }: { weekStart: string }) {
           }}
         />
       ) : null}
+
       {grid.error ? <Alert variant="destructive">{apiErrorText(grid.error)}</Alert> : null}
       {grid.isLoading ? <LoadingRows /> : null}
       {view?.state === 'NOT_PUBLISHED' ? (
@@ -423,20 +425,22 @@ function GridTab({ weekStart }: { weekStart: string }) {
           <Table>
             <TableHeader className="bg-muted">
               <TableRow className="hover:bg-transparent">
+                <TableHead>#</TableHead>
                 <TableHead className="sticky left-0 z-10 bg-muted px-2">
                   {t('registrations.employee')}
                 </TableHead>
                 {day.items.map((i) => (
                   <TableHead
                     key={i.id}
-                    className="min-w-20 whitespace-normal px-2 text-center normal-case tracking-normal"
+                    className="min-w-20 max-w-28 whitespace-normal px-2 text-center normal-case tracking-normal"
                   >
                     <DishName type={i.type} displayName={i.displayName} />
                   </TableHead>
                 ))}
-                <TableHead className="px-2 text-right">{t('registrations.total')}</TableHead>
+                <TableHead className="px-2 text-center">{t('registrations.total')}</TableHead>
               </TableRow>
             </TableHeader>
+
             <TableBody>
               {view.rows.map((row, r) => {
                 const cell = row.cells[date]!;
@@ -455,6 +459,7 @@ function GridTab({ weekStart }: { weekStart: string }) {
                     key={row.employeeCode}
                     className={cn('hover:bg-transparent', hasError && 'bg-destructive/5')}
                   >
+                    <TableCell>{r + 1}</TableCell>
                     <TableCell
                       className={cn(
                         'sticky left-0 z-10 min-w-36 bg-card px-2 py-1.5',
@@ -521,24 +526,26 @@ function GridTab({ weekStart }: { weekStart: string }) {
                         />
                       </TableCell>
                     ))}
-                    <TableCell className="px-2 text-right font-medium tabular-nums">
+                    <TableCell className="px-2 text-center font-medium tabular-nums">
                       {rowTotal}
                     </TableCell>
                   </TableRow>
                 );
               })}
             </TableBody>
+
             <tfoot className="bg-muted/60 font-semibold">
               <tr>
                 <td className="sticky left-0 z-10 bg-muted px-2 py-3">
                   {t('registrations.total')}
                 </td>
+                <td></td>
                 {day.items.map((i) => (
                   <td key={i.id} className="px-2 py-3 text-center tabular-nums">
                     {totals[i.id] ?? 0}
                   </td>
                 ))}
-                <td className="px-2 py-3 text-right tabular-nums">
+                <td className="px-2 py-3 text-center tabular-nums">
                   {Object.values(totals).reduce((s, n) => s + n, 0)}
                 </td>
               </tr>
