@@ -4,6 +4,7 @@ import type { NextConfig } from 'next';
 const apiInternalUrl = process.env.API_INTERNAL_URL ?? 'http://localhost:3001';
 
 const config: NextConfig = {
+  allowedDevOrigins: ['10.3.1.137'],
   reactStrictMode: true,
   // Docker image only (NEXT_OUTPUT=standalone): a self-contained server traced from the monorepo
   // root. Off by default because tracing creates symlinks, which plain Windows accounts cannot.
