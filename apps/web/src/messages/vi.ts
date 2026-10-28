@@ -290,8 +290,8 @@ export const vi = {
     changed: 'Khác dự trù',
     tabs: {
       label: 'Dự trù và thực tế',
-      forecast: 'Dự trù tuần',
-      actual: 'Thực tế',
+      forecast: 'Đăng ký dự trù',
+      actual: 'Đăng ký thực tế',
     },
     forecastTable: {
       intro: 'Số suất đã chốt lúc {time}, chỉ để xem. Thay đổi từng ngày ở tab Thực tế.',
