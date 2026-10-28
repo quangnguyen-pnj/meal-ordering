@@ -28,7 +28,16 @@ import {
   type MenuWeekView,
 } from '@meal/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, ArrowLeftRight, ArrowUp, Check, GripVertical, Plus, X } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowLeftRight,
+  ArrowUp,
+  Check,
+  CirclePower,
+  GripVertical,
+  Plus,
+  X,
+} from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
@@ -708,8 +717,10 @@ function DayColumn({
           <Button
             variant="ghost"
             size="sm"
+            className="gap-1"
             onClick={() => actions.setServing(day.date, !day.isServing)}
           >
+            <CirclePower height={15} />
             {day.isServing ? t('menu.disableDay') : t('menu.enableDay')}
           </Button>
         ) : null}

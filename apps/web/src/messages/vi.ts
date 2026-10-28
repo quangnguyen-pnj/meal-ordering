@@ -224,7 +224,7 @@ export const vi = {
     serving: 'Có phục vụ',
     notServing: 'Không phục vụ',
     enableDay: 'Bật phục vụ',
-    disableDay: 'Tắt (nghỉ lễ)',
+    disableDay: 'Tắt',
     emptyDay: 'Chưa có món',
     replaceWith: 'Đổi thành',
     dropToReplace: 'Thả để đổi món',
