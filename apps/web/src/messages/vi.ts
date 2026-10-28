@@ -80,6 +80,7 @@ export const vi = {
     6: 'Thứ Bảy',
     7: 'Chủ nhật',
   },
+  weekdaysShort: { 1: 'T2', 2: 'T3', 3: 'T4', 4: 'T5', 5: 'T6', 6: 'T7', 7: 'CN' },
   sessions: { LUNCH: 'Bữa trưa' },
   nav: {
     label: 'Điều hướng chính',
@@ -103,7 +104,7 @@ export const vi = {
       delivery: 'Giao nhận',
       reports: 'Báo cáo',
       master: 'Nhà ăn, tầng, trung tâm chi phí',
-      org: 'Cơ cấu tổ chức',
+      org: 'Đơn vị nhận cơm',
       employees: 'Nhân viên',
       settings: 'Cài đặt',
       audit: 'Nhật ký hoạt động',
@@ -429,6 +430,24 @@ export const vi = {
     unsaved: 'Có thay đổi chưa lưu trong ngày này.',
     invalidRows: '{count} dòng có ô chưa hợp lệ',
     leaveConfirm: 'Ngày đang có thay đổi chưa lưu. Bỏ thay đổi?',
+    gridSearch: 'Tìm tên hoặc mã',
+    gridFilter: 'Lọc dòng',
+    gridFilters: {
+      all: 'Tất cả ({count})',
+      empty: 'Chưa có suất ({count})',
+      changed: 'Đã sửa, chưa lưu ({count})',
+      errors: 'Có lỗi ({count})',
+      needsReselect: 'Cần chọn lại món ({count})',
+    },
+    gridPeople: '{count} người',
+    gridShown: 'Đang hiện {shown}/{total}',
+    gridNoMatch: 'Không có ai khớp với từ khóa tìm hoặc bộ lọc.',
+    saveErrorRows: '{count} dòng có lỗi, chưa lưu được',
+    gridHintLabel: 'Cách nhập',
+    dayLocked: 'đã khóa',
+    clearFilter: 'Xóa lọc',
+    viewErrors: 'Xem dòng lỗi',
+    viewChanged: 'Xem dòng đã sửa',
     selectionErrors: {
       QUANTITY_NEGATIVE: 'số suất âm',
       QUANTITY_NOT_INTEGER: 'số suất không phải số nguyên',
@@ -472,9 +491,9 @@ export const vi = {
     codeHint: 'Chữ, số, dấu chấm, gạch ngang. Không đổi được sau khi tạo.',
   },
   org: {
-    title: 'Cơ cấu tổ chức',
+    title: 'Đơn vị nhận cơm',
     intro:
-      'Cây tổ chức 6 cấp lấy từ DMP. Chọn đầu mối nhận cơm, gán tầng, nhà ăn, trung tâm chi phí và quản trị bộ phận.',
+      'Chọn đơn vị nào là đầu mối nhận cơm, nhận tại tầng và nhà ăn nào; gán trung tâm chi phí và quản trị bộ phận cho từng đơn vị. Cây đơn vị 6 cấp lấy từ DMP.',
     tabs: {
       tree: 'Cây tổ chức',
       unassigned: 'Chưa đăng ký cơm được',

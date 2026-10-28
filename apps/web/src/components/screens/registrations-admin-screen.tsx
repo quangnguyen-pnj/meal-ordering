@@ -10,7 +10,7 @@ import {
   type RegistrationProgressView,
 } from '@meal/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FolderInput } from 'lucide-react';
+import { Clock, FolderInput, Info, Lock, Plus, Search } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { AppDialog } from '@/components/app-dialog';
@@ -26,6 +26,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Pagination } from '@/components/ui/pagination';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { LoadingRows } from '@/components/ui/skeleton';
 import {
   Table,
@@ -36,15 +37,26 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { WeekNav } from '@/components/week-nav';
 import { useDebounced } from '@/hooks/use-debounced';
 import { usePagination } from '@/hooks/use-pagination';
 import { ApiError, api } from '@/lib/api';
 import { apiErrorText } from '@/lib/errors';
-import { columnTotals, gridChanges, gridValues, type GridValues } from '@/lib/grid-draft';
+import {
+  columnTotals,
+  GRID_FILTERS,
+  gridChanges,
+  gridFilterGroups,
+  gridValues,
+  matchesGridSearch,
+  searchKey,
+  type GridFilter,
+  type GridValues,
+} from '@/lib/grid-draft';
 import { cn, formatDate, formatVnTime } from '@/lib/utils';
 import { t, vi } from '@/messages';
-import { weekdayName } from './day-meals';
+import { weekdayName, weekdayShort } from './day-meals';
 import {
   CanteenPicker,
   UnitPicker,
@@ -282,6 +294,12 @@ function rowErrorsFrom(error: unknown): Record<string, string[]> {
   return out;
 }
 
+// Frozen parts of the grid: they need a solid background, so tints are drawn with inset shadows.
+const LINE_BOTTOM = 'shadow-[inset_0_-1px_0_hsl(var(--border))]';
+const LINE_TOP = 'shadow-[inset_0_1px_0_hsl(var(--border))]';
+const STICKY_COL = 'sticky left-0 w-40 min-w-40 max-w-56 sm:w-56 sm:min-w-56';
+const COL_EDGE = 'shadow-[inset_-1px_0_0_hsl(var(--border))]';
+
 function GridTab({ weekStart }: { weekStart: string }) {
   const qc = useQueryClient();
   const units = useRegistrationUnits();
@@ -292,6 +310,11 @@ function GridTab({ weekStart }: { weekStart: string }) {
   const [values, setValues] = useState<GridValues>({});
   const [extraFor, setExtraFor] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const term = useDebounced(searchKey(q), 150);
+  const [filter, setFilter] = useState<GridFilter>('all');
+  // Bumped when a filter is picked or the values are reset (new grid, other day, discard).
+  const [snapshot, setSnapshot] = useState(0);
   const grid = useRegistrationGrid(unitId, weekStart, canteenId);
   const view = grid.data;
 
@@ -301,6 +324,7 @@ function GridTab({ weekStart }: { weekStart: string }) {
     const d = view.days.some((x) => x.date === date) ? date : (view.days[0]?.date ?? '');
     setDate(d);
     setValues(gridValues(view, d));
+    setSnapshot((n) => n + 1);
   }, [view]);
 
   const day = view?.days.find((d) => d.date === date);
@@ -322,6 +346,27 @@ function GridTab({ weekStart }: { weekStart: string }) {
     },
   });
   const serverRowErrors = rowErrorsFrom(save.error);
+  const groups =
+    view && day ? gridFilterGroups(view, date, values, changes, serverRowErrors) : null;
+
+  // A status filter keeps the rows it matched when it was picked, so a row does not vanish while
+  // someone types in it. It is worked out again on a new pick, day or grid; an empty one falls
+  // back to everyone.
+  const filterKey = `${filter}|${snapshot}`;
+  const [members, setMembers] = useState<{ key: string; codes: Set<string> | null }>({
+    key: '',
+    codes: null,
+  });
+  if (groups && members.key !== filterKey) {
+    const codes = filter === 'all' ? [] : groups[filter];
+    if (filter !== 'all' && codes.length === 0) setFilter('all');
+    else setMembers({ key: filterKey, codes: filter === 'all' ? null : new Set(codes) });
+  }
+
+  function pickFilter(next: GridFilter) {
+    setFilter(next);
+    setSnapshot((n) => n + 1);
+  }
 
   async function pickDay(d: string) {
     if (d === date) return;
@@ -336,21 +381,33 @@ function GridTab({ weekStart }: { weekStart: string }) {
     setDate(d);
     save.reset();
     if (view) setValues(gridValues(view, d));
+    setSnapshot((n) => n + 1);
   }
 
   function moveDown(e: React.KeyboardEvent<HTMLInputElement>, row: number, col: number) {
     if (e.key !== 'Enter') return;
     e.preventDefault();
     const next = document.querySelector<HTMLInputElement>(`[data-cell="${row + 1}:${col}"]`);
-    next?.focus();
+    next?.focus({ preventScroll: true });
+    // Nearest, inside the grid's scroll-padding, so the sticky header and totals never cover it.
+    next?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     next?.select();
   }
 
   const totals = view && day ? columnTotals(view, date, values) : {};
   const editable = day?.window === 'ON_BEHALF';
+  // Row numbers stay those of the whole unit while filtering.
+  const shown = (view?.rows ?? [])
+    .map((row, index) => ({ row, index }))
+    .filter(
+      ({ row }) =>
+        (!members.codes || members.codes.has(row.employeeCode)) && matchesGridSearch(row, term),
+    );
+  const filtered = !!view && shown.length !== view.rows.length;
+  const errorRows = groups?.errors.length ?? 0;
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-4">
       {confirmDialog}
       <div className="flex flex-wrap items-end gap-4">
         <UnitPicker
@@ -360,6 +417,8 @@ function GridTab({ weekStart }: { weekStart: string }) {
           onChange={(id) => {
             setUnitId(id);
             setCanteenId('');
+            setQ('');
+            setFilter('all');
             save.reset();
           }}
         />
@@ -401,48 +460,128 @@ function GridTab({ weekStart }: { weekStart: string }) {
         </p>
       ) : null}
 
-      {view?.state === 'PUBLISHED' && day ? (
+      {view?.state === 'PUBLISHED' && day && groups ? (
         <>
-          <Tabs value={date} onValueChange={(d) => void pickDay(d)}>
-            <TabsList aria-label={t('registrations.tabs.grid')}>
-              {view.days.map((d) => (
-                <TabsTrigger key={d.date} value={d.date}>
-                  {weekdayName(d.date)} {formatDate(d.date).slice(0, 5)}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
-          <Alert variant={editable ? 'default' : 'warning'}>
-            <p>{t(`registrations.windows.${day.window}`, { lock: formatVnTime(day.lockAt) })}</p>
-            {editable ? (
-              <p className="text-xs text-muted-foreground">{t('registrations.gridHint')}</p>
+          {/* Days on their own row. Then one toolbar: search and row filter (side by side, also on
+              phones) and the day's window, whose entry hint opens from the info button. */}
+          <GridDayTabs days={view.days} value={date} onPick={(d) => void pickDay(d)} />
+
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <div className="flex w-full min-w-0 gap-2 lg:w-auto">
+              <div className="relative min-w-0 flex-1 lg:w-64 lg:flex-none">
+                <Search
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden
+                />
+                <Input
+                  type="search"
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder={t('registrations.gridSearch')}
+                  aria-label={t('registrations.gridSearch')}
+                  className="pl-9"
+                />
+              </div>
+              <ResponsiveSelect
+                aria-label={t('registrations.gridFilter')}
+                value={filter}
+                onValueChange={(v) => pickFilter(v as GridFilter)}
+                className="w-40 shrink-0 sm:w-52"
+                options={GRID_FILTERS.map((f) => ({
+                  value: f,
+                  label: t(`registrations.gridFilters.${f}`, { count: groups[f].length }),
+                  disabled: f !== 'all' && f !== filter && groups[f].length === 0,
+                }))}
+              />
+            </div>
+            {filtered ? (
+              <p className="flex items-center gap-2 text-sm tabular-nums text-muted-foreground">
+                <span aria-live="polite">
+                  {t('registrations.gridShown', { shown: shown.length, total: view.rows.length })}
+                </span>
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="h-auto px-0"
+                  onClick={() => {
+                    setQ('');
+                    pickFilter('all');
+                  }}
+                >
+                  {t('registrations.clearFilter')}
+                </Button>
+              </p>
             ) : null}
-          </Alert>
+            <div
+              className={cn(
+                'flex min-h-9 items-center gap-1.5 text-sm lg:ml-auto',
+                editable ? 'text-muted-foreground' : 'rounded-md bg-warning/15 px-2.5 py-1',
+              )}
+            >
+              {editable ? (
+                <Clock className="h-4 w-4 shrink-0" aria-hidden />
+              ) : (
+                <Lock className="h-4 w-4 shrink-0" aria-hidden />
+              )}
+              <span>
+                {t(`registrations.windows.${day.window}`, { lock: formatVnTime(day.lockAt) })}
+              </span>
+              {editable ? (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0"
+                      aria-label={t('registrations.gridHintLabel')}
+                    >
+                      <Info className="h-4 w-4" aria-hidden />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="w-72 text-sm">
+                    {t('registrations.gridHint')}
+                  </PopoverContent>
+                </Popover>
+              ) : null}
+            </div>
+          </div>
+
           {save.error && Object.keys(serverRowErrors).length === 0 ? (
             <Alert variant="destructive">{apiErrorText(save.error)}</Alert>
           ) : null}
 
-          <Table>
+          {/* Scrolls inside a screen-high box, so the dish header, the names and the totals stay
+              in view; scroll-padding keeps a focused cell clear of them. */}
+          <Table containerClassName="isolate max-h-[max(22rem,calc(100dvh_-_11rem))] overflow-auto scroll-pb-16 scroll-pl-40 scroll-pt-20 sm:scroll-pl-56">
             <TableHeader className="bg-muted">
               <TableRow className="hover:bg-transparent">
-                <TableHead>#</TableHead>
-                <TableHead className="sticky left-0 z-10 bg-muted px-2">
+                <TableHead
+                  className={cn(STICKY_COL, 'top-0 z-30 bg-muted px-2', LINE_BOTTOM, COL_EDGE)}
+                >
+                  <span className="hidden w-7 pr-2 text-right sm:inline-block">#</span>
                   {t('registrations.employee')}
                 </TableHead>
                 {day.items.map((i) => (
                   <TableHead
                     key={i.id}
-                    className="min-w-20 max-w-28 whitespace-normal px-2 text-center normal-case tracking-normal"
+                    className={cn(
+                      'sticky top-0 z-20 min-w-20 max-w-28 whitespace-normal bg-muted px-2 py-2 text-center normal-case tracking-normal',
+                      LINE_BOTTOM,
+                    )}
                   >
                     <DishName type={i.type} displayName={i.displayName} />
                   </TableHead>
                 ))}
-                <TableHead className="px-2 text-center">{t('registrations.total')}</TableHead>
+                <TableHead
+                  className={cn('sticky top-0 z-20 bg-muted px-2 text-center', LINE_BOTTOM)}
+                >
+                  {t('registrations.total')}
+                </TableHead>
               </TableRow>
             </TableHeader>
 
             <TableBody>
-              {view.rows.map((row, r) => {
+              {shown.map(({ row, index }, r) => {
                 const cell = row.cells[date]!;
                 const invalid = changes.invalid[row.employeeCode] ?? [];
                 const errors = serverRowErrors[row.employeeCode] ?? [];
@@ -457,61 +596,91 @@ function GridTab({ weekStart }: { weekStart: string }) {
                 return (
                   <TableRow
                     key={row.employeeCode}
-                    className={cn('hover:bg-transparent', hasError && 'bg-destructive/5')}
+                    className={cn(
+                      'group hover:bg-transparent focus-within:bg-primary/5',
+                      hasError && 'bg-destructive/5 focus-within:bg-destructive/5',
+                    )}
                   >
-                    <TableCell>{r + 1}</TableCell>
                     <TableCell
                       className={cn(
-                        'sticky left-0 z-10 min-w-36 bg-card px-2 py-1.5',
-                        hasError && 'bg-destructive/5',
+                        STICKY_COL,
+                        'z-10 bg-card px-2 py-1',
+                        hasError
+                          ? 'shadow-[inset_-1px_0_0_hsl(var(--border)),inset_0_0_0_9999px_hsl(var(--destructive)/0.05)]'
+                          : cn(
+                              COL_EDGE,
+                              'group-focus-within:shadow-[inset_-1px_0_0_hsl(var(--border)),inset_0_0_0_9999px_hsl(var(--primary)/0.05)]',
+                            ),
                       )}
                     >
-                      <p className="font-medium">{row.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {row.employeeCode}
-                        {forecast !== null
-                          ? ` · ${t('registrations.forecastShort', { count: forecast })}`
-                          : ''}
-                      </p>
-                      <div className="flex flex-wrap gap-1">
-                        {cell.blocked ? (
-                          <Badge variant="outline">{t('registrations.blocked')}</Badge>
-                        ) : null}
-                        {cell.extra ? (
-                          <Badge variant="secondary">{t('registrations.extra')}</Badge>
-                        ) : null}
-                        {cell.needsReselect > 0 ? (
-                          <Badge variant="warning">
-                            {t('registrations.needsReselect', { count: cell.needsReselect })}
-                          </Badge>
+                      <div className="flex items-start gap-1">
+                        <span className="hidden w-7 shrink-0 pr-2 pt-0.5 text-right text-xs tabular-nums text-muted-foreground sm:block">
+                          {index + 1}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-medium" title={row.name}>
+                            {row.name}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
+                            <span className="tabular-nums">
+                              {row.employeeCode}
+                              {forecast !== null
+                                ? ` · ${t('registrations.forecastShort', { count: forecast })}`
+                                : ''}
+                            </span>
+                            {cell.blocked ? (
+                              <Badge variant="outline" className="px-1.5 leading-4">
+                                {t('registrations.blocked')}
+                              </Badge>
+                            ) : null}
+                            {cell.extra ? (
+                              <Badge variant="secondary" className="px-1.5 leading-4">
+                                {t('registrations.extra')}
+                              </Badge>
+                            ) : null}
+                            {cell.needsReselect > 0 ? (
+                              <Badge variant="warning" className="px-1.5 leading-4">
+                                {t('registrations.needsReselect', { count: cell.needsReselect })}
+                              </Badge>
+                            ) : null}
+                          </div>
+                          {invalid.length > 0 ? (
+                            <span className="sr-only">{t('registrations.invalidCell')}</span>
+                          ) : null}
+                          {errors.length > 0 ? (
+                            <p className="text-xs text-destructive">
+                              {t('registrations.rowError', { errors: errors.join(', ') })}
+                            </p>
+                          ) : null}
+                        </div>
+                        {day.window === 'EXTRA' && !cell.blocked ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 shrink-0 text-primary"
+                                aria-label={`${t('registrations.addExtra')}: ${row.name}`}
+                                onClick={() => setExtraFor(row.employeeCode)}
+                              >
+                                <Plus className="h-4 w-4" aria-hidden />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>{t('registrations.addExtra')}</TooltipContent>
+                          </Tooltip>
                         ) : null}
                       </div>
-                      {invalid.length > 0 ? (
-                        <p className="text-xs text-destructive">{t('registrations.invalidCell')}</p>
-                      ) : null}
-                      {errors.length > 0 ? (
-                        <p className="text-xs text-destructive">
-                          {t('registrations.rowError', { errors: errors.join(', ') })}
-                        </p>
-                      ) : null}
-                      {day.window === 'EXTRA' && !cell.blocked ? (
-                        <Button
-                          variant="link"
-                          size="sm"
-                          className="h-auto px-0"
-                          onClick={() => setExtraFor(row.employeeCode)}
-                        >
-                          {t('registrations.addExtra')}
-                        </Button>
-                      ) : null}
                     </TableCell>
                     {day.items.map((i, c) => (
-                      <TableCell key={i.id} className="px-1 py-1.5 text-center">
+                      <TableCell key={i.id} className="px-1 py-1 text-center">
                         <Input
                           data-cell={`${r}:${c}`}
                           inputMode="numeric"
                           aria-label={`${row.name} · ${i.displayName}`}
                           aria-invalid={invalid.includes(i.id)}
+                          title={
+                            invalid.includes(i.id) ? t('registrations.invalidCell') : undefined
+                          }
                           disabled={!editable || cell.blocked}
                           value={values[row.employeeCode]?.[i.id] ?? ''}
                           onKeyDown={(e) => moveDown(e, r, c)}
@@ -522,30 +691,57 @@ function GridTab({ weekStart }: { weekStart: string }) {
                               [row.employeeCode]: { ...prev[row.employeeCode], [i.id]: v },
                             }));
                           }}
-                          className="mx-auto w-16 text-center tabular-nums"
+                          className="mx-auto w-14 px-1 text-center tabular-nums md:h-9"
                         />
                       </TableCell>
                     ))}
-                    <TableCell className="px-2 text-center font-medium tabular-nums">
+                    <TableCell className="px-2 py-1 text-center font-medium tabular-nums">
                       {rowTotal}
                     </TableCell>
                   </TableRow>
                 );
               })}
+              {shown.length === 0 ? (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={day.items.length + 2} className="text-muted-foreground">
+                    {t('registrations.gridNoMatch')}
+                  </TableCell>
+                </TableRow>
+              ) : null}
             </TableBody>
 
-            <tfoot className="bg-muted/60 font-semibold">
+            {/* Totals are always the whole unit, whatever the search or filter shows. */}
+            <tfoot className="font-semibold">
               <tr>
-                <td className="sticky left-0 z-10 bg-muted px-2 py-3">
-                  {t('registrations.total')}
+                <td
+                  className={cn(
+                    STICKY_COL,
+                    'bottom-0 z-30 bg-muted px-2 py-2.5',
+                    'shadow-[inset_-1px_0_0_hsl(var(--border)),inset_0_1px_0_hsl(var(--border))]',
+                  )}
+                >
+                  <span className="sm:pl-8">{t('registrations.total')}</span>
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    {t('registrations.gridPeople', { count: view.rows.length })}
+                  </span>
                 </td>
-                <td></td>
                 {day.items.map((i) => (
-                  <td key={i.id} className="px-2 py-3 text-center tabular-nums">
+                  <td
+                    key={i.id}
+                    className={cn(
+                      'sticky bottom-0 z-20 bg-muted px-2 py-2.5 text-center tabular-nums',
+                      LINE_TOP,
+                    )}
+                  >
                     {totals[i.id] ?? 0}
                   </td>
                 ))}
-                <td className="px-2 py-3 text-center tabular-nums">
+                <td
+                  className={cn(
+                    'sticky bottom-0 z-20 bg-muted px-2 py-2.5 text-center tabular-nums',
+                    LINE_TOP,
+                  )}
+                >
                   {Object.values(totals).reduce((s, n) => s + n, 0)}
                 </td>
               </tr>
@@ -566,10 +762,22 @@ function GridTab({ weekStart }: { weekStart: string }) {
 
           {editable && dirty ? (
             <div className="sticky bottom-0 z-20 -mx-5 flex flex-wrap items-center justify-between gap-3 bg-card px-5 py-3 sm:-mx-6 sm:px-6 shadow-[0_-6px_16px_-6px_rgb(41_37_36/0.12)]">
-              <p className="text-sm" role="status">
-                {invalidCount > 0
-                  ? t('registrations.invalidRows', { count: invalidCount })
-                  : t('registrations.unsaved')}
+              <p className="flex flex-wrap items-center gap-x-2 text-sm" role="status">
+                <span>
+                  {invalidCount > 0
+                    ? t('registrations.invalidRows', { count: invalidCount })
+                    : errorRows > 0
+                      ? t('registrations.saveErrorRows', { count: errorRows })
+                      : t('registrations.unsaved')}
+                </span>
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="h-auto px-0"
+                  onClick={() => pickFilter(errorRows > 0 ? 'errors' : 'changed')}
+                >
+                  {errorRows > 0 ? t('registrations.viewErrors') : t('registrations.viewChanged')}
+                </Button>
               </p>
               <div className="flex gap-2">
                 <Button
@@ -578,6 +786,7 @@ function GridTab({ weekStart }: { weekStart: string }) {
                   onClick={() => {
                     setValues(gridValues(view, date));
                     save.reset();
+                    setSnapshot((n) => n + 1);
                   }}
                 >
                   {t('registrations.discard')}
@@ -596,6 +805,42 @@ function GridTab({ weekStart }: { weekStart: string }) {
         </>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Day tabs of the grid. Manual activation: a tab changes the day only when clicked or on
+ * Enter/Space, not when it merely gets focus. With Radix's default (automatic), the unsaved-changes
+ * confirm reopened after "Hủy", because closing it gives focus back to the clicked tab, and that
+ * focus switched the day again.
+ */
+export function GridDayTabs({
+  days,
+  value,
+  onPick,
+}: {
+  days: RegistrationGridView['days'];
+  value: string;
+  onPick: (date: string) => void;
+}) {
+  return (
+    <Tabs value={value} onValueChange={onPick} activationMode="manual" className="min-w-0">
+      <TabsList aria-label={t('registrations.tabs.grid')}>
+        {days.map((d) => (
+          <TabsTrigger key={d.date} value={d.date} className="gap-1 px-2.5 sm:px-3">
+            {d.window !== 'ON_BEHALF' ? (
+              <Lock className="h-3.5 w-3.5 opacity-70" aria-hidden />
+            ) : null}
+            <span className="sm:hidden">{weekdayShort(d.date)}</span>
+            <span className="hidden sm:inline">{weekdayName(d.date)}</span>
+            <span className="tabular-nums">{formatDate(d.date).slice(0, 5)}</span>
+            {d.window !== 'ON_BEHALF' ? (
+              <span className="sr-only">{t('registrations.dayLocked')}</span>
+            ) : null}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </Tabs>
   );
 }
 

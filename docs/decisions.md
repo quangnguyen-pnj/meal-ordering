@@ -319,3 +319,30 @@ Bug report: after an admin replaced a dish in Thực đơn tuần, the employee 
 - **After the HC admin saves or publishes a menu** the banner list is refetched, so the "menu not published" warning (BR-06) goes away at once. The HC admin's own notices also show at once.
 - **Several notices fold into one box:** "Bạn có n thông báo mới về thay đổi thực đơn." with "Xem chi tiết" (a compact list, each item with "Đã xem"), "Đã xem tất cả", and "Chọn lại món" while one of them is a removed dish. A single notice is shown in full, as before. The box is amber when a dish has to be reselected (BR-14), grey otherwise. A notice that needs action comes first. System warnings (BR-06) stay as separate alerts.
 - **Per user:** the banners key holds the user id, and a PIN sign-in drops the client query cache (it was kept before, so on a shared machine the next person could briefly see the previous person's cached week), so the next person to sign in in the same tab never sees the previous person's data.
+
+## Bulk entry grid for large units (UI review, 2026-10-27)
+
+A unit can have a few hundred people (Tổ Nhẫn: 296), so "Nhập theo bảng" was several thousand pixels tall: the dish header scrolled away and the totals sat at the very bottom.
+
+- **Still not paged** (see "Pagination of lists"): "Lưu ngày" saves the whole unit, so a page would hide changes and invalid cells that the save includes or is blocked by, Enter would stop at the end of a page, and Ctrl+F would only search one page.
+- **The grid scrolls inside a box about one screen high** (`100dvh − 11rem`, at least 22rem). Inside it the dish header (`top`), the name column (`left`) and the totals row (`bottom`) are sticky. The box is one scroll container for both axes, which is what lets the header stick: the old `overflow-x-auto` wrapper made it the sticky container without scrolling vertically. `isolate` keeps its z-indexes under the app's own sticky header. Scroll-padding and `scrollIntoView({ block: 'nearest' })` on Enter keep the focused cell clear of the sticky parts.
+- **Toolbar instead of extra rows:**
+  - Search by name or code, ignoring case and Vietnamese accents ("nguyen" finds "Nguyễn").
+  - One "Lọc dòng" select with counts: Tất cả, Chưa có suất, Đã sửa chưa lưu, Có lỗi, Cần chọn lại món. Empty filters are disabled. A select is used instead of chips so the toolbar stays on one row, also on phones.
+  - "Đang hiện n/N · Xóa lọc" only while filtering.
+  - The day's window ("Nhập thay được đến …" or the locked warning) sits at the end of the same row. The entry hint moved behind an ⓘ popover, replacing a full-width alert.
+  - Day tabs show "T2 02/11" on phones and a lock icon on days that can no longer be entered on behalf.
+- **A status filter keeps the rows it matched when it was picked** (`gridFilterGroups`, snapshotted in `GridTab`). Typing a meal into a "Chưa có suất" row, or fixing a "Có lỗi" row, does not make it vanish under the cursor. The filter is worked out again when it is picked again, on another day, after a save or a discard, and falls back to "Tất cả" when nothing matches. The save bar links to "Xem dòng lỗi" / "Xem dòng đã sửa".
+- **Totals are always the whole unit**, whatever is filtered; the totals cell says how many people that is. Row numbers stay those of the whole unit while filtering.
+- **Shorter rows (about 48px on desktop):**
+  - The row number moved into the name column, hidden on phones so more dish columns fit.
+  - Badges sit on the code line.
+  - An invalid cell is shown by its red border and a tooltip, no longer by an extra line of text.
+  - "Thêm suất bổ sung" is a "+" icon button.
+  - Cells are 36px high from `md` (44px on touch screens).
+- **No table library.** TanStack Table would bring sorting, filtering and paging models, but the hard parts here are sticky layout, keyboard entry and dirty tracking, which it does not provide. A grid component (AG Grid, Glide) would not match the shadcn styling or the Vietnamese copy file. The unit sizes in the seed (up to about 300 people × 5–6 dishes) render without virtualisation. If typing ever feels slow, memoise the rows first; virtualisation (`@tanstack/react-virtual`) would break Ctrl+F and the Enter navigation, which looks cells up in the DOM.
+- **Day tabs use manual activation** (`GridDayTabs`, fixed 2026-10-27). With Radix's default, a tab switches as soon as it gets focus. Closing the unsaved-changes confirm gives focus back to the clicked tab, so "Hủy" switched the day again and the confirm reopened every time. Now a click, Enter or Space switches the day; arrow keys only move the focus. Guarded by `registrations-admin-screen.test.tsx`.
+
+## UI copy: "Đơn vị nhận cơm" (2026-10-27)
+
+- **The `/admin/org` screen and its menu item are called "Đơn vị nhận cơm"** (was "Cơ cấu tổ chức"), at the PO's request. The name says what the screen is for: choosing which unit is the meal point and where it eats, rather than naming the data source. "Vị trí nhận cơm" was turned down because it overlaps with the "Nhà ăn, tầng, trung tâm chi phí" catalogue and leaves out cost centers and department admins. The intro leads with the task and mentions DMP last. The tab "Cây tổ chức" and the phrase "theo cơ cấu tổ chức" (cost center source) stay, because there they mean the org tree itself. The URL is unchanged.
