@@ -1,7 +1,6 @@
 import type { BannerView } from '@meal/shared';
 import { redirect } from 'next/navigation';
 import { AppShell } from '@/components/app-shell/app-shell';
-import { toBanners } from '@/lib/banners';
 import { getSession, serverGet } from '@/lib/server-api';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +14,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const banners = await serverGet<{ items: BannerView[] }>('/me/banners');
 
   return (
-    <AppShell user={user} banners={toBanners(banners?.items ?? [])}>
+    <AppShell user={user} banners={banners?.items ?? []}>
       {children}
     </AppShell>
   );

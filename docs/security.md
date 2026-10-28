@@ -17,6 +17,7 @@ Run through this list before closing any phase or change request (AGENTS.md rule
 
 - [ ] Every endpoint has an explicit `@Public()`, `@Authenticated()` or `@RequirePermission()` (the guard denies a route without one), and every admin endpoint has a 403 test for out-of-scope access (`rbac.e2e-spec.ts`).
 - [ ] Ids taken from the URL or body are checked against the caller's scope (factory, org unit, canteen), not only against existence.
+- [ ] **Cached data in the browser is per user.** A PIN sign-in drops every cached query, and the banners key holds the user id, so a second person signing in in the same tab does not see the first person's data (`apps/web/src/components/forms.test.tsx`, `banner-area.test.tsx`). Microsoft sign-in is a full page load, which starts with an empty cache.
 - [ ] Development-only routes (fake clock, mock Microsoft page) are not mounted in production (`env.ts` refuses the settings).
 
 ## Input and output

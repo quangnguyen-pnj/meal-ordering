@@ -1,6 +1,6 @@
 'use client';
 
-import type { SessionUser } from '@meal/shared';
+import type { BannerView, SessionUser } from '@meal/shared';
 import { LogOut, Menu } from 'lucide-react';
 import Link, { useLinkStatus } from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -14,7 +14,7 @@ import { api } from '@/lib/api';
 import { visibleNav, type NavItem } from '@/lib/nav';
 import { cn } from '@/lib/utils';
 import { t, vi } from '@/messages';
-import { BannerArea, type Banner } from './banner-area';
+import { BannerArea } from './banner-area';
 
 const itemClass = 'flex min-h-11 items-center gap-2 rounded-md px-3 text-sm';
 
@@ -99,7 +99,7 @@ export function AppShell({
   children,
 }: {
   user: SessionUser;
-  banners: readonly Banner[];
+  banners: readonly BannerView[];
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -185,7 +185,7 @@ export function AppShell({
         <main className="flex flex-1 flex-col gap-5 p-4 md:gap-6 md:p-8 print:p-0">
           {/* Paper forms (/admin/print) print the page content only. */}
           <div className="print:hidden">
-            <BannerArea banners={banners} />
+            <BannerArea userId={user.id} initial={banners} />
           </div>
           {children}
         </main>

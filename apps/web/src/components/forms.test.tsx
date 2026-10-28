@@ -2,16 +2,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { BannerArea } from './app-shell/banner-area';
 import { ChangePinForm } from './change-pin-form';
 import { LoginForm } from './login-form';
 
 const replace = vi.fn();
-let pathname = '/week';
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace, refresh: vi.fn(), back: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
-  usePathname: () => pathname,
 }));
 
 afterEach(() => {
@@ -63,6 +60,22 @@ describe('LoginForm', () => {
     await userEvent.type(screen.getByLabelText('Mã PIN (6 chữ số)'), '123456');
     await userEvent.click(screen.getByRole('button', { name: 'Đăng nhập' }));
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/today'));
+  });
+
+  it("drops the previous person's cached data on sign-in", async () => {
+    reply(200, { user: { pinMustChange: false } });
+    const client = new QueryClient();
+    client.setQueryData(['/registrations/me/week', null], { state: 'PUBLISHED' });
+    render(
+      <QueryClientProvider client={client}>
+        <LoginForm />
+      </QueryClientProvider>,
+    );
+    await userEvent.type(screen.getByLabelText('Mã nhân viên'), 'PNJP000001');
+    await userEvent.type(screen.getByLabelText('Mã PIN (6 chữ số)'), '123456');
+    await userEvent.click(screen.getByRole('button', { name: 'Đăng nhập' }));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/today'));
+    expect(client.getQueryData(['/registrations/me/week', null])).toBeUndefined();
   });
 
   it('shows the invalid-credentials message and clears the PIN', async () => {
@@ -128,46 +141,6 @@ describe('ChangePinForm', () => {
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/today'));
     const [, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
     expect(JSON.parse(init.body as string)).toEqual({ currentPin: '123456', newPin: '654321' });
-  });
-});
-
-describe('BannerArea', () => {
-  it('renders nothing when there are no banners', () => {
-    const { container } = render(<BannerArea banners={[]} />);
-    expect(container).toBeEmptyDOMElement();
-  });
-
-  it('renders warnings as status and errors as alerts', () => {
-    render(
-      <BannerArea
-        banners={[
-          { id: 'a', severity: 'warning', message: 'Thực đơn chưa được công bố' },
-          { id: 'b', severity: 'error', message: 'Đồng bộ chấm công thất bại' },
-        ]}
-      />,
-    );
-    expect(screen.getByRole('status')).toHaveTextContent('Thực đơn chưa được công bố');
-    expect(screen.getByRole('alert')).toHaveTextContent('Đồng bộ chấm công thất bại');
-  });
-
-  it('links an unpublished-menu warning to the menu builder, except on that screen', () => {
-    const banner = {
-      id: 'm',
-      severity: 'warning' as const,
-      message: 'Thực đơn chưa được công bố',
-      action: { href: '/admin/menu', label: 'Mở Thực đơn tuần' },
-    };
-    pathname = '/admin/org';
-    const { unmount } = render(<BannerArea banners={[banner]} />);
-    expect(screen.getByRole('link', { name: 'Mở Thực đơn tuần' })).toHaveAttribute(
-      'href',
-      '/admin/menu',
-    );
-    unmount();
-    pathname = '/admin/menu';
-    render(<BannerArea banners={[banner]} />);
-    expect(screen.queryByRole('link', { name: 'Mở Thực đơn tuần' })).toBeNull();
-    pathname = '/week';
   });
 });
 

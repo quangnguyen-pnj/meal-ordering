@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { PinLoginSchema, type PinLoginInput, type SessionUser } from '@meal/shared';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { Alert } from '@/components/ui/alert';
@@ -28,6 +28,7 @@ export function loginErrorText(error: unknown): string {
 
 export function LoginForm() {
   const router = useRouter();
+  const qc = useQueryClient();
   const params = useSearchParams();
   const ssoFailed = params.get('error') === 'sso_failed';
 
@@ -40,6 +41,8 @@ export function LoginForm() {
     mutationFn: (input: PinLoginInput) =>
       api.post<{ user: SessionUser | null }>('/auth/pin/login', input),
     onSuccess: ({ user }) => {
+      // Someone else may have used this tab before: drop their cached data (security.md).
+      qc.removeQueries();
       router.replace(user?.pinMustChange ? '/change-pin' : safeNextPath(params.get('next')));
       router.refresh();
     },

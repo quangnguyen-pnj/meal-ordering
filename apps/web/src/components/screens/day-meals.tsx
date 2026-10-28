@@ -33,16 +33,20 @@ export function DayWindowBadge({ day }: { day: MyDayView }) {
 /**
  * One serving day's meals with a stepper per meal (BR-20), the forecast once taken (BR-07,
  * BR-23), meals waiting for reselection (BR-14), a red note on a dish that replaced the one the
- * employee chose after closeAt (BR-14, 2026-10-23), and desserts. Shared by /week and /today.
+ * employee chose after closeAt (BR-14, 2026-10-23), and desserts. Shared by /week and /today;
+ * only /week's "Thực tế" tab shows the forecast per dish.
  */
 export function DayMeals({
   day,
   quantities,
   onChange,
+  showForecast = false,
 }: {
   day: MyDayView;
   quantities: Record<string, number>;
   onChange: (menuItemId: string, quantity: number) => void;
+  /** /week "Thực tế" tab: each dish's forecast and the difference from it (BR-23). */
+  showForecast?: boolean;
 }) {
   const locked = day.window === 'LOCKED';
   return (
@@ -74,11 +78,17 @@ export function DayMeals({
                   </p>
                 ) : null}
 
-                {/* {day.forecastTotal !== null && item.forecast !== value ? (
+                {showForecast && day.forecastTotal !== null ? (
                   <p className="text-xs text-muted-foreground">
-                    {t('week.forecast', { count: item.forecast })}
+                    {t('week.itemForecast', { count: item.forecast })}
+                    {value !== item.forecast ? (
+                      <span className="ml-1.5 font-medium text-foreground">
+                        ({value > item.forecast ? '+' : ''}
+                        {value - item.forecast})
+                      </span>
+                    ) : null}
                   </p>
-                ) : null} */}
+                ) : null}
               </div>
 
               {locked ? (

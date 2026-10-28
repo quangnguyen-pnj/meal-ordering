@@ -28,7 +28,16 @@ import {
   type MenuWeekView,
 } from '@meal/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, ArrowLeftRight, ArrowUp, Check, GripVertical, Plus, X } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowLeftRight,
+  ArrowUp,
+  Check,
+  CirclePower,
+  GripVertical,
+  Plus,
+  X,
+} from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
@@ -54,6 +63,7 @@ import { Label } from '@/components/ui/label';
 import { LoadingRows } from '@/components/ui/skeleton';
 import { WeekNav } from '@/components/week-nav';
 import { api } from '@/lib/api';
+import { BANNERS_KEY } from '@/lib/banners';
 import { apiErrorText } from '@/lib/errors';
 import {
   createMenuBuilderStore,
@@ -250,6 +260,8 @@ function WeekEditor({ canteenId, weekStart }: { canteenId: string; weekStart: st
       qc.setQueryData(weekKey, res.menu);
       store.getState().load(res.menu);
       setReason('');
+      // The admin may have a meal on a changed dish too (BR-14).
+      void qc.invalidateQueries({ queryKey: BANNERS_KEY });
       toast.success(
         published
           ? t('menu.effects', {
@@ -272,6 +284,8 @@ function WeekEditor({ canteenId, weekStart }: { canteenId: string; weekStart: st
     onSuccess: (res) => {
       qc.setQueryData(weekKey, res);
       store.getState().load(res);
+      // The "menu not published" banner (BR-06) goes away now, not on the next reload.
+      void qc.invalidateQueries({ queryKey: BANNERS_KEY });
       toast.success(t('menu.published'));
     },
   });
@@ -703,8 +717,10 @@ function DayColumn({
           <Button
             variant="ghost"
             size="sm"
+            className="gap-1"
             onClick={() => actions.setServing(day.date, !day.isServing)}
           >
+            <CirclePower height={15} />
             {day.isServing ? t('menu.disableDay') : t('menu.enableDay')}
           </Button>
         ) : null}
