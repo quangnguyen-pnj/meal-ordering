@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { t } from '@/messages';
 import { WeekRegistrationScreen } from './week-registration-screen';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -56,24 +57,28 @@ const show = (view: MyRegistrationWeekView) => {
   );
 };
 
+// Tab labels come from the messages file so a copy change does not break these tests.
+const forecastTab = t('week.tabs.forecast');
+const actualTab = t('week.tabs.actual');
+
 describe('WeekRegistrationScreen tabs', () => {
   it('BR-07: before closeAt only "Dự trù tuần" exists and holds the steppers', async () => {
     show(week(false));
-    expect(await screen.findByRole('tab', { name: 'Dự trù tuần' })).toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: 'Thực tế' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('tab', { name: forecastTab })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: actualTab })).not.toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Thêm 1 suất [Mặn] Cơm gà' })).toHaveLength(2);
   });
 
   it('BR-23: after closeAt "Thực tế" opens first, with the forecast and difference per dish', async () => {
     show(week(true));
-    expect(await screen.findByRole('tab', { name: 'Thực tế', selected: true })).toBeVisible();
+    expect(await screen.findByRole('tab', { name: actualTab, selected: true })).toBeVisible();
     expect(screen.getAllByRole('button', { name: 'Thêm 1 suất [Mặn] Cơm gà' })).toHaveLength(2);
     expect(screen.getByText('(+1)')).toBeInTheDocument();
   });
 
   it('BR-07: after closeAt "Dự trù tuần" is a read-only table of the snapshot', async () => {
     show(week(true));
-    await userEvent.click(await screen.findByRole('tab', { name: 'Dự trù tuần' }));
+    await userEvent.click(await screen.findByRole('tab', { name: forecastTab }));
     const table = screen.getByRole('table');
     expect(table).toHaveTextContent('Cơm gà');
     expect(screen.getAllByRole('row').at(-1)).toHaveTextContent(/Tổng\s*1\s*1\s*2/);
